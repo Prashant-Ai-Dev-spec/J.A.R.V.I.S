@@ -3,7 +3,7 @@
 
 ```
   ╔══════════════════════════════════════════════════════╗
-  ║   Built for Prashant | Powered by Anthropic Claude   ║
+  ║   Built for Prashant | Powered by Groq Integration   ║
   ╚══════════════════════════════════════════════════════╝
 ```
 
