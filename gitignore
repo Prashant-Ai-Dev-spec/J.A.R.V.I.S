@@ -1,0 +1,33 @@
+# J.A.R.V.I.S — GitIgnore
+# These files will NOT be uploaded to GitHub
+
+# Secret keys — NEVER upload these!
+.env
+jarvis_config.json
+
+# Personal data
+jarvis_ai_history.json
+jarvis_ai_memory.json
+jarvis_notes.json
+jarvis_reminders.json
+jarvis_events.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Screenshots / captures
+hud_capture_*.png
+*.png
+
+# Backup files
+*.bak
+
+# VS Code settings
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
