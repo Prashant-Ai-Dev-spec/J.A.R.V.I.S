@@ -1032,6 +1032,8 @@ class JARVISGui:
         self.last_face_count = 0
         self.face_cascade = self._load_face_cascade()
         self.face_tracking_available = bool(self.face_cascade is not None)
+        self._face_identity_label = "—"
+        self._face_rec_interval = max(3, int(self.cfg.get("face_recognition_interval_frames", 10) or 10))
         self.vision_mode = tk.StringVar(value=VisionMode.MARK50)
         self._hud_anim = 0
         self._glitch_seed = random.randint(0, 10_000)
@@ -3854,6 +3856,7 @@ class JARVISGui:
             "network",
             "email_check",
             "send_email",
+            "send_whatsapp",
             "calendar_today",
             "calendar_upcoming",
             "add_event",
@@ -3942,12 +3945,16 @@ class JARVISGui:
         threading.Thread(target=worker, daemon=True).start()
 
     def _build_runtime_context(self) -> str:
+        mood = getattr(self.jarvis.voice, "last_voice_mood", "neutral")
+        fid = getattr(self, "_face_identity_label", "—")
         return (
             f"Time: {datetime.datetime.now().strftime('%A %I:%M %p')}; "
             f"OS: {platform.system()}; "
             f"Camera live: {self.camera_running}; "
             f"Face tracking: {self.face_tracking_var.get()}; "
             f"Faces detected: {self.last_face_count}; "
+            f"Face ID (camera): {fid}; "
+            f"Voice mood (last utterance): {mood}; "
             f"Matrix HUD: {self.matrix_overlay_var.get()}; "
             f"Reference image: {Path(self.reference_image_path).name if self.reference_image_path else 'none'}; "
             f"Attached items: {len(self.attached_files)}; "
@@ -4498,10 +4505,49 @@ class JARVISGui:
 
     def _decorate_camera_frame(self, frame, skip_face_detect: bool = False):
         faces = list(self._last_faces) if skip_face_detect else self._detect_faces(frame)
+        if (
+            not skip_face_detect
+            and getattr(self.jarvis, "owner_face", None)
+            and self.jarvis.owner_face.enabled
+            and faces
+        ):
+            fc = int(getattr(self, "_cam_fc", 0) or 0)
+            if fc % self._face_rec_interval == 0:
+                try:
+                    prev = getattr(self, "_face_identity_label", "")
+                    self._face_identity_label = self.jarvis.owner_face.identify_primary(frame, faces)
+                    if self._face_identity_label == "STRANGER" and prev != "STRANGER":
+                        self.root.after(0, lambda: self._emit_event("camera", "Primary face does not match owner profile (stranger)."))
+                except Exception:
+                    self._face_identity_label = "?"
+        elif not skip_face_detect and not faces:
+            self._face_identity_label = "NO_FACE"
+
         display = self._apply_vision_mode(frame, faces)
         # Matrix overlay remains optional as an extra layer (can be combined with modes).
         display = self._apply_matrix_overlay(display)
         height, width = display.shape[:2]
+
+        tag = str(getattr(self, "_face_identity_label", "") or "").strip()
+        if tag and tag not in ("—", "?", "NO_FACE"):
+            if tag == "OWNER":
+                col = (80, 220, 100)
+            elif tag == "STRANGER":
+                col = (60, 60, 255)
+            elif tag == "NO_PROFILE":
+                col = (180, 180, 100)
+            else:
+                col = (200, 200, 200)
+            cv2.putText(
+                display,
+                f"FACE: {tag}",
+                (10, 26),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                col,
+                2,
+                cv2.LINE_AA,
+            )
 
         # In Mark50 we already draw target UI; keep the old face HUD for other modes.
         if self.face_tracking_var.get() and self.face_tracking_available and self.vision_mode.get() not in (VisionMode.MARK50,):
