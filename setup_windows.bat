@@ -31,7 +31,7 @@ if errorlevel 1 (
 )
 
 echo [4/4] Installing optional packages...
-pip install pyautogui Pillow pygame
+pip install pyautogui Pillow pygame pytesseract
 
 echo.
 echo  ✓ Setup complete!
