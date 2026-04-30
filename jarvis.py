@@ -10,10 +10,11 @@
 # ═══════════════════════════════════════════════
 #  STANDARD LIBRARY
 # ═══════════════════════════════════════════════
-import os, sys, json, time, datetime, subprocess, mimetypes, shutil, queue
+import os, sys, json, time, datetime, subprocess, mimetypes, shutil, queue, ctypes
 import threading, platform, webbrowser, random
 import re, socket, imaplib, smtplib, base64
 import email as email_lib
+import csv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import decode_header
@@ -41,6 +42,16 @@ def try_import(module, pip_name=None, attr=None):
 # Voice
 sr        = try_import("speech_recognition")
 pyttsx3   = try_import("pyttsx3")
+vosk        = try_import("vosk")
+openwakeword_mod = try_import("openwakeword")
+pywhatkit   = try_import("pywhatkit")
+face_recognition = try_import("face_recognition")
+pytesseract = try_import("pytesseract")
+if pytesseract:
+    import os
+    if os.name == 'nt':
+        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+librosa_mod = try_import("librosa")
 
 # System
 psutil    = try_import("psutil")
@@ -113,6 +124,35 @@ def load_config() -> dict:
             "tts_rate": 172,
             "tts_volume": 0.95,
             "wake_words": ["jarvis", "hey jarvis"],
+            # Voice (offline + wake word)
+            # voice_mode: "auto" uses Vosk when offline (or when Google STT fails),
+            #            "online" forces Google STT,
+            #            "offline" forces Vosk STT.
+            "voice_mode": "auto",
+            # Path to a Vosk model folder. Example:
+            #   "vosk_models/vosk-model-small-en-us-0.15"
+            "vosk_model_path": "",
+            # Offline wake word — openWakeWord (free, no account). Pre-trained e.g. "hey_jarvis".
+            # See: https://github.com/dscripka/openWakeWord
+            "openwakeword_enabled": True,
+            "openwakeword_models": ["hey_jarvis"],
+            "openwakeword_threshold": 0.5,
+            "openwakeword_chunk_size": 1280,
+            "openwakeword_inference_framework": "onnx",
+            # WhatsApp (pywhatkit)
+            # Default country code is only used if you type number without +.
+            "whatsapp_default_country_code": "+91",
+            # Contacts CSV (name -> phone) for WhatsApp/SMS-like commands.
+            # Default: "contacts.csv" in the same folder as jarvis.py
+            "contacts_csv_path": "contacts.csv",
+            "face_recognition_enabled": True,
+            "owner_face_images": [],
+            "face_match_tolerance": 0.55,
+            "face_recognition_interval_frames": 10,
+            "ollama_enabled": True,
+            "ollama_base_url": "http://localhost:11434/v1",
+            "ollama_model": "llama3.2",
+            "use_ollama_when_offline": True,
             "camera_index": 0,
             "storage_roots": ["C:\\" if os.name == "nt" else str(Path.home())],
             "custom_apps": {}
@@ -130,6 +170,26 @@ def load_config() -> dict:
     cfg.setdefault("location_lat", None)
     cfg.setdefault("location_lon", None)
     cfg.setdefault("storage_roots", ["C:\\" if os.name == "nt" else str(Path.home())])
+    cfg.setdefault("voice_mode", "auto")
+    cfg.setdefault("vosk_model_path", "")
+    cfg.setdefault("openwakeword_enabled", True)
+    cfg.setdefault("openwakeword_models", ["hey_jarvis"])
+    cfg.setdefault("openwakeword_threshold", 0.5)
+    cfg.setdefault("openwakeword_chunk_size", 1280)
+    cfg.setdefault("openwakeword_inference_framework", "onnx")
+    cfg.setdefault("whatsapp_default_country_code", "+91")
+    cfg.setdefault("contacts_csv_path", "contacts.csv")
+    cfg.setdefault("face_recognition_enabled", True)
+    cfg.setdefault("owner_face_images", [])
+    cfg.setdefault("face_match_tolerance", 0.55)
+    cfg.setdefault("face_recognition_interval_frames", 10)
+    cfg.setdefault("ollama_enabled", True)
+    cfg.setdefault("ollama_base_url", "http://localhost:11434/v1")
+    cfg.setdefault("ollama_model", "llama3.2")
+    cfg.setdefault("use_ollama_when_offline", True)
+    cfg.setdefault("telegram_bot_token", "")
+    cfg.setdefault("telegram_allowed_user_id", None)
+    cfg.setdefault("telegram_enabled", False)
     return cfg
 
 # ═══════════════════════════════════════════════════════════════
@@ -145,6 +205,13 @@ class VoiceEngine:
         self._tts_thread = None
         self._tts_stop = threading.Event()
         self._tts_ready = threading.Event()
+        self._vosk_model = None
+        self._oww_model = None
+        self._oww_threshold = 0.5
+        self._oww_chunk = 1280
+        self._vosk_enabled = False
+        self.last_voice_mood = "neutral"
+        self.last_voice_mood_hint = ""
         self._init_tts()
         self._init_stt()
 
@@ -209,13 +276,14 @@ class VoiceEngine:
             pass
 
     def _init_stt(self):
-        if not sr:
-            print("[WARN] SpeechRecognition not installed — mic input disabled.")
-            return
         try:
             import sounddevice as sd
-            self.recognizer = sr.Recognizer()
             self.sd = sd
+            if sr:
+                self.recognizer = sr.Recognizer()
+
+            # Best-effort: if vosk is installed and model path exists, enable offline STT.
+            self._vosk_enabled = self._try_init_vosk()
             self.stt_ok = True
             try:
                 print("  [OK] Microphone ready (sounddevice)")
@@ -223,6 +291,167 @@ class VoiceEngine:
                 pass
         except Exception as e:
             print(f"[WARN] STT init failed: {e}")
+            self.stt_ok = False
+
+    def _is_online(self, timeout_s: float = 0.8) -> bool:
+        try:
+            sock = socket.create_connection(("8.8.8.8", 53), timeout=timeout_s)
+            sock.close()
+            return True
+        except Exception:
+            return False
+
+    def _want_offline_stt(self) -> bool:
+        mode = str(self.cfg.get("voice_mode", "auto") or "auto").strip().lower()
+        if mode == "offline":
+            return True
+        if mode == "online":
+            return False
+        # auto
+        return not self._is_online()
+
+    def _try_init_vosk(self) -> bool:
+        if not vosk:
+            return False
+        model_path = str(self.cfg.get("vosk_model_path", "") or "").strip()
+        if not model_path:
+            return False
+        path = Path(model_path)
+        if not path.is_absolute():
+            path = (BASE_DIR / path).resolve()
+        if not path.exists():
+            print(f"[WARN] Vosk model path not found: {path}")
+            return False
+        try:
+            self._vosk_model = vosk.Model(str(path))
+            return True
+        except Exception as e:
+            print(f"[WARN] Vosk init failed: {e}")
+            self._vosk_model = None
+            return False
+
+    def _openwakeword_model_names(self) -> list[str]:
+        raw = self.cfg.get("openwakeword_models")
+        if raw is None:
+            return ["hey_jarvis"]
+        if isinstance(raw, str):
+            return [m.strip() for m in raw.split(",") if m.strip()]
+        if isinstance(raw, list):
+            return [str(m).strip() for m in raw if str(m).strip()]
+        return ["hey_jarvis"]
+
+    def _ensure_openwakeword(self) -> bool:
+        """Lazy-load openWakeWord (may download ONNX/TFLite assets on first run)."""
+        if self._oww_model is not None:
+            return True
+        if not openwakeword_mod:
+            return False
+        if not bool(self.cfg.get("openwakeword_enabled", True)):
+            return False
+        try:
+            from openwakeword.model import Model
+        except ImportError:
+            return False
+
+        try:
+            self._oww_threshold = float(self.cfg.get("openwakeword_threshold", 0.5) or 0.5)
+        except Exception:
+            self._oww_threshold = 0.5
+        self._oww_threshold = max(0.05, min(0.99, self._oww_threshold))
+
+        try:
+            self._oww_chunk = int(self.cfg.get("openwakeword_chunk_size", 1280) or 1280)
+        except Exception:
+            self._oww_chunk = 1280
+        self._oww_chunk = max(640, min(4096, self._oww_chunk))
+
+        fw = str(self.cfg.get("openwakeword_inference_framework", "onnx") or "onnx").strip().lower()
+        if fw not in ("onnx", "tflite"):
+            fw = "onnx"
+
+        models = self._openwakeword_model_names()
+        if not models:
+            models = ["hey_jarvis"]
+
+        def _make():
+            return Model(wakeword_models=models, inference_framework=fw)
+
+        try:
+            self._oww_model = _make()
+        except Exception as e:
+            print(f"[openWakeWord] first init failed ({e}); downloading models...")
+            try:
+                openwakeword_mod.utils.download_models()
+            except Exception as dle:
+                print(f"[openWakeWord] download_models failed: {dle}")
+                self._oww_model = None
+                return False
+            try:
+                self._oww_model = _make()
+            except Exception as e2:
+                print(f"[openWakeWord] init failed: {e2}")
+                self._oww_model = None
+                return False
+
+        try:
+            print(f"  [OK] openWakeWord ready ({', '.join(models)}, {fw})")
+        except UnicodeEncodeError:
+            pass
+        return True
+
+    def _listen_audio_bytes(self, seconds: float, samplerate: int = 16000) -> bytes | None:
+        if not self.stt_ok:
+            return None
+        try:
+            import numpy as np
+            frames = int(max(0.1, float(seconds)) * samplerate)
+            recording = self.sd.rec(frames, samplerate=samplerate, channels=1, dtype="int16")
+            self.sd.wait()
+            if recording is None:
+                return None
+            arr = np.asarray(recording).reshape(-1)
+            return arr.tobytes()
+        except Exception as e:
+            print(f"[MIC error] {e}")
+            return None
+
+    def _vosk_recognize(self, audio_bytes: bytes, samplerate: int = 16000) -> str | None:
+        if not (self._vosk_enabled and self._vosk_model and vosk):
+            return None
+        try:
+            rec = vosk.KaldiRecognizer(self._vosk_model, samplerate)
+            rec.SetWords(False)
+            rec.AcceptWaveform(audio_bytes)
+            result = json.loads(rec.FinalResult() or "{}")
+            text = str(result.get("text", "") or "").strip()
+            return text or None
+        except Exception as e:
+            print(f"[Vosk] {e}")
+            return None
+
+    def _google_recognize(self, audio_bytes: bytes, samplerate: int = 16000) -> str | None:
+        if not (sr and getattr(self, "recognizer", None)):
+            return None
+        try:
+            import io
+            import wave
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(samplerate)
+                wf.writeframes(audio_bytes)
+            buf.seek(0)
+            audio = sr.AudioFile(buf)
+            with audio as source:
+                audio_data = self.recognizer.record(source)
+            text = self.recognizer.recognize_google(audio_data)
+            return text.strip() if text else None
+        except sr.UnknownValueError:
+            return None
+        except Exception as e:
+            print(f"[Google STT] {e}")
+            return None
 
     def speak(self, text: str):
         clean = re.sub(r"\*+|#+|`+|\[.*?\]\(.*?\)|_{1,2}", "", text).strip()
@@ -248,41 +477,32 @@ class VoiceEngine:
     def listen(self, timeout=6, phrase_limit=15) -> str | None:
         if not self.stt_ok:
             return None
+
+        samplerate = 16000
         try:
-            import sounddevice as sd
-            import numpy as np
-            import io
-            import wave
-            samplerate = 16000
             try:
                 print("[MIC] Listening...")
             except UnicodeEncodeError:
                 pass
-            recording = sd.rec(
-                int(samplerate * phrase_limit),
-                samplerate=samplerate,
-                channels=1,
-                dtype='int16'
-            )
-            sd.wait()
-            buf = io.BytesIO()
-            with wave.open(buf, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(samplerate)
-                wf.writeframes(recording.tobytes())
-            buf.seek(0)
-            audio = sr.AudioFile(buf)
-            with audio as source:
-                audio_data = self.recognizer.record(source)
-            text = self.recognizer.recognize_google(audio_data)
-            try:
-                print(f"You: {text}")
-            except UnicodeEncodeError:
-                pass
-            return text.strip()
-        except sr.UnknownValueError:
-            return None
+
+            audio_bytes = self._listen_audio_bytes(seconds=float(phrase_limit), samplerate=samplerate)
+            if not audio_bytes:
+                return None
+
+            # Prefer offline when configured/needed.
+            if self._want_offline_stt():
+                text = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+                if text:
+                    return text
+
+            # Online / fallback.
+            text = self._google_recognize(audio_bytes, samplerate=samplerate)
+            if text:
+                return text
+
+            # Final fallback: if online failed but Vosk is available, try it anyway.
+            text = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+            return text
         except Exception as e:
             print(f"[STT error] {e}")
             return None
@@ -318,50 +538,70 @@ class VoiceEngine:
     def wait_wake_word(self, words: list) -> bool:
         if not self.stt_ok:
             return False
+
+        # Prefer openWakeWord (offline wake word, no Picovoice account).
+        if self._ensure_openwakeword() and self._oww_model is not None:
+            try:
+                import numpy as np
+                samplerate = 16000
+                chunk = self._oww_chunk
+                with self.sd.InputStream(
+                    samplerate=samplerate,
+                    channels=1,
+                    dtype="int16",
+                    blocksize=chunk,
+                ) as stream:
+                    while True:
+                        pcm, _ = stream.read(chunk)
+                        pcm = np.asarray(pcm, dtype=np.int16).reshape(-1)
+                        if pcm.size < chunk:
+                            continue
+                        scores = self._oww_model.predict(pcm)
+                        if not scores:
+                            continue
+                        for _, sc in scores.items():
+                            try:
+                                val = float(sc)
+                            except Exception:
+                                continue
+                            if val >= self._oww_threshold:
+                                try:
+                                    self._oww_model.reset()
+                                except Exception:
+                                    pass
+                                return True
+            except Exception as e:
+                print(f"[openWakeWord] {e}")
+                # Fall through to STT-based wake.
+
+        # STT-based wake word (Google/Vosk) — fallback.
         try:
-            import sounddevice as sd
-            import numpy as np
-            import io
-            import wave
             samplerate = 16000
-            # Record 4 seconds — enough for longer phrases like "jarvis are you there"
-            recording = sd.rec(
-                int(samplerate * 4),
-                samplerate=samplerate,
-                channels=1,
-                dtype='int16'
-            )
-            sd.wait()
-            buf = io.BytesIO()
-            with wave.open(buf, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(samplerate)
-                wf.writeframes(recording.tobytes())
-            buf.seek(0)
-            audio = sr.AudioFile(buf)
-            with audio as source:
-                audio_data = self.recognizer.record(source)
-            heard = self.recognizer.recognize_google(audio_data).lower()
-            print(f"[WAKE] Heard: '{heard}'")
+            audio_bytes = self._listen_audio_bytes(seconds=4.0, samplerate=samplerate)
+            if not audio_bytes:
+                return False
 
-            # Merge config words + built-in wake phrases
+            heard = None
+            if self._want_offline_stt():
+                heard = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+            if not heard:
+                heard = self._google_recognize(audio_bytes, samplerate=samplerate)
+            if not heard and self._vosk_enabled:
+                heard = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+            if not heard:
+                return False
+
+            heard_l = heard.lower()
+            print(f"[WAKE] Heard: '{heard_l}'")
+
             all_triggers = list(self.WAKE_PHRASES)
-            for w in words:
-                if w.lower() not in all_triggers:
-                    all_triggers.append(w.lower())
+            for w in words or []:
+                wl = str(w).lower().strip()
+                if wl and wl not in all_triggers:
+                    all_triggers.append(wl)
 
-            # Check exact phrase match
-            for phrase in all_triggers:
-                if phrase in heard:
-                    return True
-
-            # Fuzzy: if "jarvis" is in heard at all — activate
-            if "jarvis" in heard:
-                return True
-
-            return False
-        except:
+            return any(phrase in heard_l for phrase in all_triggers)
+        except Exception:
             return False
 
 
@@ -508,36 +748,90 @@ def _voiceengine_speak(self, text: str):
             pass
 
 
+def _voiceengine_infer_mood_from_samples(self, y_int16, sr: int = 16000) -> None:
+    """Rough voice affect from short PCM (librosa if available)."""
+    try:
+        import numpy as np
+    except Exception:
+        self.last_voice_mood = "neutral"
+        self.last_voice_mood_hint = ""
+        return
+    y = np.asarray(y_int16, dtype=np.float32).reshape(-1) / 32768.0
+    if y.size < 512:
+        self.last_voice_mood = "neutral"
+        self.last_voice_mood_hint = ""
+        return
+    rms = float(np.sqrt(np.mean(np.square(y)) + 1e-12))
+    zcr = 0.05
+    cent = 2000.0
+    if librosa_mod is not None:
+        try:
+            zcr = float(np.mean(librosa_mod.feature.zero_crossing_rate(y + 1e-8, frame_length=2048, hop_length=512)))
+            cent = float(np.mean(librosa_mod.feature.spectral_centroid(y=y, sr=sr, hop_length=512, n_fft=1024)))
+        except Exception:
+            pass
+    else:
+        try:
+            zcr = float(np.mean(np.abs(np.diff(np.sign(y)))) / (2.0 * max(1, y.size - 1)))
+        except Exception:
+            zcr = 0.05
+
+    if rms < 0.014:
+        mood, hint = "low_energy", "User sounds very quiet or tired; be gentle, brief, and reassuring."
+    elif rms > 0.095:
+        mood, hint = "high_energy", "User sounds loud or excited; stay composed but acknowledge urgency."
+    elif zcr > 0.11 and cent > 2600:
+        mood, hint = "tense", "Voice suggests tension or stress; be calm, clear, and supportive."
+    elif cent < 1700 and rms < 0.045:
+        mood, hint = "calm", "User sounds calm; keep replies efficient and steady."
+    else:
+        mood, hint = "neutral", ""
+    self.last_voice_mood = mood
+    self.last_voice_mood_hint = hint
+
+
 def _voiceengine_listen(self, timeout=6, phrase_limit=15) -> str | None:
     if not self.stt_ok:
         return None
     try:
-        import sounddevice as sd
         import numpy as np
-        import io
-        import wave
         samplerate = 16000
-        print("[MIC] Listening...")
-        recording = sd.rec(
-            int(samplerate * phrase_limit),
-            samplerate=samplerate,
-            channels=1,
-            dtype="int16"
-        )
-        sd.wait()
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(samplerate)
-            wf.writeframes(recording.tobytes())
-        buf.seek(0)
-        audio = sr.AudioFile(buf)
-        with audio as source:
-            audio_data = self.recognizer.record(source)
-        text = self.recognizer.recognize_google(audio_data)
-        print(f"[YOU] {text}")
-        return text.strip()
+        try:
+            print("[MIC] Listening...")
+        except UnicodeEncodeError:
+            pass
+        frames = int(max(0.5, float(phrase_limit)) * samplerate)
+        recording = self.sd.rec(frames, samplerate=samplerate, channels=1, dtype="int16")
+        self.sd.wait()
+        arr = np.asarray(recording, dtype=np.int16).reshape(-1)
+        _voiceengine_infer_mood_from_samples(self, arr, sr=samplerate)
+        audio_bytes = arr.tobytes()
+
+        if self._want_offline_stt():
+            text = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+            if text:
+                try:
+                    print(f"[YOU] {text}")
+                except UnicodeEncodeError:
+                    pass
+                return text.strip()
+
+        text = self._google_recognize(audio_bytes, samplerate=samplerate)
+        if text:
+            try:
+                print(f"[YOU] {text}")
+            except UnicodeEncodeError:
+                pass
+            return text.strip()
+
+        text = self._vosk_recognize(audio_bytes, samplerate=samplerate)
+        if text:
+            try:
+                print(f"[YOU] {text}")
+            except UnicodeEncodeError:
+                pass
+            return text.strip()
+        return None
     except sr.UnknownValueError:
         return None
     except Exception as e:
@@ -684,11 +978,32 @@ def _aibrain_normalize_key(value, placeholders: tuple[str, ...] = ()) -> str:
     return cleaned
 
 
+def _aibrain_network_online(timeout_s: float = 0.75) -> bool:
+    try:
+        sock = socket.create_connection(("8.8.8.8", 53), timeout=timeout_s)
+        sock.close()
+        return True
+    except OSError:
+        return False
+
+
+def _aibrain_messages_have_images(messages: list) -> bool:
+    for msg in messages or []:
+        content = msg.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
+    return False
+
+
 def _aibrain_init_client(self):
     if not openai_mod:
         raise ImportError("openai package not installed. Run: pip install openai")
 
     from openai import OpenAI
+
+    self.ollama_client = _aibrain_make_ollama_client(self)
 
     requested = str(self.cfg.get("ai_provider", "auto") or "auto").strip().lower()
     openrouter_key = _aibrain_normalize_key(
@@ -738,6 +1053,20 @@ def _aibrain_init_client(self):
     )
 
 
+def _aibrain_make_ollama_client(self):
+    if not openai_mod or not bool(self.cfg.get("ollama_enabled", True)):
+        return None
+    try:
+        from openai import OpenAI
+        base = str(self.cfg.get("ollama_base_url", "http://localhost:11434/v1") or "").strip().rstrip("/")
+        if not base.endswith("/v1"):
+            base = (base + "/v1") if base else "http://localhost:11434/v1"
+        return OpenAI(api_key="ollama", base_url=base)
+    except Exception as e:
+        print(f"[Ollama] client init skipped: {e}")
+        return None
+
+
 def _aibrain_model_candidates(self, vision: bool = False) -> list[str]:
     provider = getattr(self, "ai_provider", "openrouter")
     if provider == "groq":
@@ -766,6 +1095,33 @@ def _aibrain_create_completion(self, messages: list, models: list[str]) -> str:
     provider = getattr(self, "ai_provider", "openrouter")
     provider_label = getattr(self, "ai_provider_label", "AI provider")
     retry_errors = []
+
+    # Offline: local Ollama (OpenAI-compatible API). Skip for multimodal messages.
+    if (
+        bool(self.cfg.get("use_ollama_when_offline", True))
+        and bool(self.cfg.get("ollama_enabled", True))
+        and getattr(self, "ollama_client", None) is not None
+        and not _aibrain_network_online()
+        and not _aibrain_messages_have_images(messages)
+    ):
+        om = str(self.cfg.get("ollama_model", "llama3.2") or "llama3.2").strip() or "llama3.2"
+        try:
+            resp = self.ollama_client.chat.completions.create(
+                model=om,
+                messages=messages,
+                max_tokens=900,
+            )
+            reply = resp.choices[0].message.content
+            if isinstance(reply, list):
+                reply = "\n".join(
+                    part.get("text", "")
+                    for part in reply
+                    if isinstance(part, dict) and part.get("type") == "text"
+                ).strip()
+            if reply:
+                return reply or "Local model returned an empty reply."
+        except Exception as e:
+            retry_errors.append(f"ollama({om}): {e}")
 
     for model in models:
         try:
@@ -1096,6 +1452,18 @@ def _aibrain_store_memory_facts(self, facts: list[dict]):
 
 def _aibrain_prompt_with_memory(self) -> str:
     base_prompt = getattr(self, "system_prompt", "") or self._build_prompt()
+    ve = getattr(self, "voice_engine", None)
+    if ve is not None:
+        mood = str(getattr(ve, "last_voice_mood", "neutral") or "neutral")
+        hint = str(getattr(ve, "last_voice_mood_hint", "") or "").strip()
+        if hint:
+            base_prompt = base_prompt + "\n\nVoice-affect guidance (do not mention you analyzed audio): " + hint
+        elif mood and mood != "neutral":
+            base_prompt = (
+                base_prompt
+                + f"\n\nThe user's latest voice energy suggests mood class '{mood}'. "
+                "Adjust tone slightly — never say you detected it from their voice."
+            )
     memory_store = getattr(self, "memory_store", {}) or {}
     if not memory_store:
         return base_prompt
@@ -1899,6 +2267,93 @@ class SystemModule:
         except:
             return f"I couldn't find '{name}'. Add it to custom_apps in your config."
 
+    # ── Close App ─────────────────────────────────────────────
+    def close_app(self, name: str) -> str:
+        n = name.lower().strip()
+
+        # ── Windows APP_CLOSE_MAP — common apps and their process names ──
+        APP_CLOSE_MAP = {
+            # ── Browsers ──────────────────────────────────────────────
+            "chrome":               ["chrome.exe", "google chrome"],
+            "google chrome":        ["chrome.exe", "google chrome"],
+            "edge":                 ["msedge.exe", "microsoft edge"],
+            "microsoft edge":       ["msedge.exe", "microsoft edge"],
+            "firefox":              ["firefox.exe", "firefox"],
+
+            # ── Code / Dev ────────────────────────────────────────────
+            "vscode":               ["code.exe", "visual studio code"],
+            "vs code":              ["code.exe", "visual studio code"],
+            "visual studio code":   ["code.exe", "visual studio code"],
+            "android studio":       ["studio64.exe", "android studio"],
+            "terminal":             ["windows terminal", "wt.exe"],
+            "windows terminal":     ["windows terminal", "wt.exe"],
+            "cmd":                  ["cmd.exe", "command prompt"],
+            "powershell":           ["powershell.exe", "powershell"],
+            "python":               ["python.exe", "python"],
+            "virtualbox":           ["virtualbox.exe", "virtualbox"],
+            "oracle virtualbox":    ["virtualbox.exe", "virtualbox"],
+            "bluestacks":           ["bluestacks.exe", "bluestacks"],
+
+            # ── Microsoft Office ──────────────────────────────────────
+            "word":                 ["winword.exe", "microsoft word"],
+            "excel":                ["excel.exe", "microsoft excel"],
+            "powerpoint":           ["powerpnt.exe", "microsoft powerpoint"],
+            "onenote":              ["onenote.exe", "microsoft onenote"],
+            "microsoft teams":      ["teams.exe", "microsoft teams"],
+            "teams":                ["teams.exe", "microsoft teams"],
+            "outlook":              ["outlook.exe", "outlook"],
+
+            # ── Media & Entertainment ─────────────────────────────────
+            "spotify":              ["spotify.exe", "spotify"],
+            "vlc":                  ["vlc.exe", "vlc media player"],
+            "vlc media player":     ["vlc.exe", "vlc media player"],
+            "media player":         ["wmplayer.exe", "windows media player"],
+            "windows media player": ["wmplayer.exe", "windows media player"],
+
+            # ── Communication ─────────────────────────────────────────
+            "whatsapp":             ["whatsapp.exe", "whatsapp"],
+            "telegram":             ["telegram.exe", "telegram"],
+            "discord":              ["discord.exe", "discord"],
+
+            # ── System Tools ──────────────────────────────────────────
+            "calculator":           ["calc.exe", "calculator"],
+            "paint":                ["mspaint.exe", "paint"],
+            "task manager":         ["taskmgr.exe", "task manager"],
+            "file explorer":        ["explorer.exe", "file explorer"],
+            "explorer":             ["explorer.exe", "file explorer"],
+            "file manager":         ["explorer.exe", "file explorer"],
+            "notepad":              ["notepad.exe", "notepad"],
+        }
+
+        # Check for app in close map
+        for key, process_names in APP_CLOSE_MAP.items():
+            if key in n or n in key:
+                for process_name in process_names:
+                    try:
+                        # Try to kill by process name
+                        result = subprocess.run(["taskkill", "/f", "/im", process_name], 
+                                              capture_output=True, text=True, timeout=5)
+                        if result.returncode == 0:
+                            return f"Closed {key}."
+                    except subprocess.TimeoutExpired:
+                        return f"Timeout while trying to close {key}."
+                    except Exception as e:
+                        continue
+                return f"Could not find running process for {key}."
+
+        # Try to close by window title (fallback)
+        try:
+            # Use PowerShell to close window by title
+            ps_cmd = f"Get-Process | Where-Object {{$_.MainWindowTitle -like '*{name}*'}} | Stop-Process -Force"
+            result = subprocess.run(["powershell", "-Command", ps_cmd], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and "Stop-Process" in result.stderr:
+                return f"Closed {name}."
+        except:
+            pass
+
+        return f"I couldn't find '{name}' to close. Try using Task Manager."
+
     # ── File Operations ───────────────────────────────────────
     def search_files(self, query: str, path: str = None) -> str:
         search_path = str(self._resolve_storage_path(path)) if path else str(self._default_storage_root())
@@ -1991,6 +2446,56 @@ class SystemModule:
         except Exception as e:
             return f"Volume change failed: {e}"
 
+    def _press_media_key_windows(self, vk: int) -> bool:
+        try:
+            ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+            ctypes.windll.user32.keybd_event(vk, 0, 2, 0)
+            return True
+        except Exception:
+            return False
+
+    def control_media(self, action: str) -> str:
+        action = str(action or "").strip().lower()
+        if action not in {"playpause", "next", "previous"}:
+            return "I can only control play/pause, next, or previous track right now."
+
+        key_map = {
+            "playpause": ("playpause", 0xB3),
+            "next": ("nexttrack", 0xB0),
+            "previous": ("prevtrack", 0xB1),
+        }
+        key_name, vk_code = key_map[action]
+
+        if self.os_type == "Windows":
+            if self._press_media_key_windows(vk_code):
+                return f"Media {action.replace('playpause','play/pause')} command sent."
+
+        if pyautogui:
+            try:
+                pyautogui.press(key_name)
+                return f"Media {action.replace('playpause','play/pause')} command sent."
+            except Exception:
+                pass
+
+        return "Media control is unavailable. Make sure pyautogui is installed and the media app is active."
+
+    def read_screen_text(self) -> str:
+        if not pyautogui:
+            return "pyautogui not installed. Install it with: pip install pyautogui"
+        if not pytesseract:
+            return (
+                "Screen reading requires Tesseract OCR. "
+                "Step 1: `pip install pytesseract`. "
+                "Step 2: Install the Tesseract engine from https://github.com/UB-Mannheim/tesseract/wiki and add it to your system PATH."
+            )
+        try:
+            screenshot = pyautogui.screenshot()
+            text = pytesseract.image_to_string(screenshot, lang="eng") if pytesseract else ""
+            text = str(text or "").strip()
+            return text or "No readable text was detected on the screen."
+        except Exception as e:
+            return f"Screen OCR failed: {e}"
+
     def take_screenshot(self) -> str:
         if not pyautogui:
             return "pyautogui not installed. Run: pip install pyautogui"
@@ -2031,6 +2536,73 @@ class SystemModule:
         if pyperclip:
             return f"Clipboard contains: {pyperclip.paste()}"
         return "pyperclip not installed."
+
+    # ── File Management for Telegram ──────────────────────────
+    def list_files_telegram(self, path: str = None) -> str:
+        """List files in a directory for Telegram display."""
+        try:
+            search_path = str(self._resolve_storage_path(path)) if path else str(self._default_storage_root())
+            if not self._is_allowed_storage_path(Path(search_path)):
+                return f"Access denied for {search_path}."
+
+            items = []
+            try:
+                for item in os.listdir(search_path):
+                    if not item.startswith('.'):  # Skip hidden files
+                        full_path = os.path.join(search_path, item)
+                        if os.path.isdir(full_path):
+                            items.append(f"📁 {item}/")
+                        else:
+                            size = os.path.getsize(full_path)
+                            size_str = self._format_file_size(size)
+                            items.append(f"📄 {item} ({size_str})")
+            except PermissionError:
+                return f"Permission denied accessing {search_path}."
+
+            if not items:
+                return f"No files found in {search_path}."
+
+            # Limit to 50 items for Telegram
+            if len(items) > 50:
+                items = items[:50]
+                items.append("... (and more)")
+
+            result = f"Files in {Path(search_path).name or 'root'}:\n" + "\n".join(items)
+            return result[:4000]  # Telegram message limit
+
+        except Exception as e:
+            return f"Error listing files: {e}"
+
+    def download_file_telegram(self, file_path: str) -> tuple:
+        """Prepare file for Telegram download. Returns (file_path, caption) or (None, error_msg)."""
+        try:
+            target = self._find_existing_path(file_path)
+            if target is None or not target.exists():
+                return None, f"File not found: {file_path}"
+
+            if not self._is_allowed_storage_path(target):
+                return None, f"Access denied for {target}."
+
+            if not target.is_file():
+                return None, f"Not a file: {target}"
+
+            # Check file size (Telegram limit is 50MB for bots)
+            size = target.stat().st_size
+            if size > 50 * 1024 * 1024:  # 50MB
+                return None, f"File too large ({self._format_file_size(size)}). Telegram limit is 50MB."
+
+            return str(target), f"📎 {target.name} ({self._format_file_size(size)})"
+
+        except Exception as e:
+            return None, f"Error preparing file: {e}"
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human readable format."""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f}{unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f}TB"
 
 
 def _system_hardware_report(self) -> str:
@@ -2191,6 +2763,395 @@ class EmailModule:
             return f"Send failed: {e}"
 
 # ═══════════════════════════════════════════════════════════════
+#  WHATSAPP MODULE (pywhatkit)
+# ═══════════════════════════════════════════════════════════════
+class WhatsAppModule:
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.enabled = bool(pywhatkit)
+
+    def _normalize_phone(self, phone: str) -> str:
+        p = str(phone or "").strip()
+        if not p:
+            return ""
+        p = p.replace(" ", "").replace("-", "")
+        if p.startswith("+"):
+            return p
+        default_cc = str(self.cfg.get("whatsapp_default_country_code", "+91") or "+91").strip()
+        if not default_cc.startswith("+"):
+            default_cc = "+" + default_cc
+        if p.startswith("0"):
+            p = p.lstrip("0")
+        return default_cc + p
+
+    def send_message(self, phone: str, message: str) -> str:
+        if not self.enabled:
+            return "WhatsApp messaging is not available. Install pywhatkit: pip install pywhatkit"
+        phone_n = self._normalize_phone(phone)
+        msg = str(message or "").strip()
+        if not phone_n or not msg:
+            return "WhatsApp message cancelled."
+        try:
+            # Opens WhatsApp Web and sends instantly. User must be logged in to WhatsApp Web.
+            pywhatkit.sendwhatmsg_instantly(
+                phone_no=phone_n,
+                message=msg,
+                wait_time=12,
+                tab_close=True,
+                close_time=3,
+            )
+            return f"WhatsApp message queued to {phone_n}."
+        except Exception as e:
+            return f"WhatsApp send failed: {e}"
+
+    def _find_whatsapp_window(self):
+        if not pyautogui or not hasattr(pyautogui, "getWindowsWithTitle"):
+            return None
+        try:
+            # More flexible title matching
+            all_windows = pyautogui.getAllWindows()
+            for win in all_windows:
+                title = getattr(win, 'title', '').lower()
+                if 'whatsapp' in title and getattr(win, "width", 0) > 200 and getattr(win, "height", 0) > 200:
+                    return win
+        except Exception:
+            pass
+        return None
+
+    def read_incoming(self) -> str:
+        if not pyautogui:
+            return "pyautogui not installed. Install it with: pip install pyautogui"
+        if not pytesseract:
+            return (
+                "Screen reading requires Tesseract OCR. "
+                "Step 1: `pip install pytesseract`. "
+                "Step 2: Install the Tesseract engine from https://github.com/UB-Mannheim/tesseract/wiki and add it to your system PATH."
+            )
+        try:
+            whatsapp_window = self._find_whatsapp_window()
+            if not whatsapp_window:
+                import webbrowser
+                webbrowser.open('https://web.whatsapp.com')
+                time.sleep(3)
+                whatsapp_window = self._find_whatsapp_window()
+                if not whatsapp_window:
+                    return "Could not find or open WhatsApp Web window. Please open https://web.whatsapp.com manually and ensure it's logged in."
+
+            try:
+                whatsapp_window.activate()
+                time.sleep(0.8)
+            except Exception:
+                pass
+
+            left = max(0, whatsapp_window.left)
+            top = max(0, whatsapp_window.top)
+            width = whatsapp_window.width
+            height = whatsapp_window.height
+
+            list_region = (
+                left + int(width * 0.02),
+                top + int(height * 0.15),
+                int(width * 0.28),
+                int(height * 0.75),
+            )
+            chat_region = (
+                left + int(width * 0.31),
+                top + int(height * 0.15),
+                int(width * 0.67),
+                int(height * 0.75),
+            )
+
+            list_screenshot = pyautogui.screenshot(region=list_region)
+            chat_screenshot = pyautogui.screenshot(region=chat_region)
+            list_text = pytesseract.image_to_string(list_screenshot, lang="eng")
+            chat_text = pytesseract.image_to_string(chat_screenshot, lang="eng")
+
+            list_lines = [line.strip() for line in list_text.splitlines() if line.strip()]
+            chat_lines = [line.strip() for line in chat_text.splitlines() if line.strip()]
+
+            if not list_lines and not chat_lines:
+                return "No readable WhatsApp text found. Make sure a chat list and message pane are visible."
+
+            part1 = " | ".join(list_lines[:10])
+            part2 = " | ".join(chat_lines[:10])
+            result_parts = []
+            if part1:
+                result_parts.append(f"Chats: {part1}")
+            if part2:
+                result_parts.append(f"Messages: {part2}")
+            return " — ".join(result_parts)
+        except Exception as e:
+            return f"WhatsApp incoming read failed: {e}"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  CONTACTS (CSV) — in-memory directory
+# ═══════════════════════════════════════════════════════════════
+class ContactsModule:
+    """
+    Loads contacts from a CSV file into memory.
+
+    Supported headers (case-insensitive):
+    - name, phone
+    Optional:
+    - whatsapp (if you want a dedicated WhatsApp number)
+
+    If there are no headers, it will treat column0=name, column1=phone.
+    """
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self._contacts: dict[str, dict[str, str]] = {}
+        self._loaded_from: str | None = None
+        self._load_error: str | None = None
+        self.reload()
+
+    def _resolve_path(self) -> Path:
+        raw = str(self.cfg.get("contacts_csv_path", "contacts.csv") or "contacts.csv").strip()
+        p = Path(raw)
+        if not p.is_absolute():
+            p = (BASE_DIR / p).resolve()
+        return p
+
+    @staticmethod
+    def _norm_key(name: str) -> str:
+        return re.sub(r"\s+", " ", str(name or "").strip().lower())
+
+    def reload(self) -> bool:
+        path = self._resolve_path()
+        self._contacts = {}
+        self._loaded_from = str(path)
+        self._load_error = None
+        if not path.exists():
+            self._load_error = f"Contacts file not found: {path}"
+            return False
+
+        def clean_phone(p: str) -> str:
+            # Keep + and digits only (WhatsApp likes +<country><number>)
+            s = str(p or "").strip()
+            if not s:
+                return ""
+            s = s.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            s = re.sub(r"[^\d+]", "", s)
+            return s
+
+        try:
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                sample = f.read(2048)
+                f.seek(0)
+                # Try to detect delimiter
+                try:
+                    dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
+                    delimiter = dialect.delimiter
+                except Exception:
+                    delimiter = ","
+
+                reader = csv.reader(f, delimiter=delimiter)
+                rows = [r for r in reader if any(c.strip() for c in r)]
+                if not rows:
+                    self._load_error = "Contacts CSV is empty."
+                    return False
+
+                # Header or no-header handling
+                header = [c.strip().lower() for c in rows[0]]
+                # Support both:
+                # - simple CSV: name,phone[,whatsapp]
+                # - Google Contacts export: First Name,...,Phone 1 - Value
+                has_header = (
+                    ("name" in header and (("phone" in header) or ("whatsapp" in header)))
+                    or ("phone 1 - value" in header)
+                    or ("phone 2 - value" in header)
+                    or ("mobile" in header and "name" in header)
+                )
+
+                if has_header:
+                    # Re-read with DictReader
+                    f.seek(0)
+                    dict_reader = csv.DictReader(f, delimiter=delimiter)
+                    for r in dict_reader:
+                        # Normalize keys (case-insensitive lookups)
+                        r_lc = {str(k or "").strip().lower(): v for k, v in (r or {}).items()}
+
+                        # Name: prefer explicit "name", otherwise compose like Google Contacts.
+                        name = str(r_lc.get("name", "") or "").strip()
+                        if not name:
+                            first = str(r_lc.get("first name", "") or "").strip()
+                            middle = str(r_lc.get("middle name", "") or "").strip()
+                            last = str(r_lc.get("last name", "") or "").strip()
+                            composed = " ".join([p for p in [first, middle, last] if p]).strip()
+                            name = composed or str(r_lc.get("file as", "") or "").strip() or str(r_lc.get("nickname", "") or "").strip()
+                        if not name:
+                            continue
+
+                        # Phone: prefer whatsapp/phone then common export fields.
+                        phone_raw = (
+                            r_lc.get("whatsapp")
+                            or r_lc.get("phone")
+                            or r_lc.get("phone 1 - value")
+                            or r_lc.get("phone 2 - value")
+                            or r_lc.get("mobile")
+                            or r_lc.get("mobile phone")
+                            or ""
+                        )
+                        phone = clean_phone(phone_raw)
+                        if not phone:
+                            continue
+                        self._contacts[self._norm_key(name)] = {"name": name, "phone": phone}
+                else:
+                    # Assume first two columns: name, phone
+                    for r in rows:
+                        if len(r) < 2:
+                            continue
+                        name = str(r[0] or "").strip()
+                        phone = clean_phone(str(r[1] or ""))
+                        if not name or not phone:
+                            continue
+                        self._contacts[self._norm_key(name)] = {"name": name, "phone": phone}
+
+            return True
+        except Exception as e:
+            self._load_error = f"Contacts load failed: {e}"
+            return False
+
+    def lookup_phone(self, query: str) -> str | None:
+        q = self._norm_key(query)
+        if not q:
+            return None
+        # Exact match
+        if q in self._contacts:
+            return self._contacts[q]["phone"]
+        # Fuzzy contains match (first hit)
+        for k, v in self._contacts.items():
+            if q in k:
+                return v["phone"]
+        return None
+
+    def status(self) -> str:
+        if self._load_error:
+            return self._load_error
+        return f"Loaded {len(self._contacts)} contacts from {self._loaded_from}."
+
+
+# ═══════════════════════════════════════════════════════════════
+#  OWNER FACE RECOGNITION (face_recognition + dlib)
+# ═══════════════════════════════════════════════════════════════
+class OwnerFaceRecognizer:
+    """Compares live camera faces to enrolled owner photos (offline)."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.enabled = bool(face_recognition) and bool(cfg.get("face_recognition_enabled", True))
+        try:
+            self.tolerance = float(cfg.get("face_match_tolerance", 0.55) or 0.55)
+        except Exception:
+            self.tolerance = 0.55
+        self.tolerance = max(0.35, min(0.75, self.tolerance))
+        self._encodings: list = []
+        self._load_error: str | None = None
+        self._reload()
+
+    def _collect_image_paths(self) -> list[Path]:
+        paths: list[Path] = []
+        raw = self.cfg.get("owner_face_images") or []
+        if isinstance(raw, str):
+            raw = [raw]
+        for item in raw:
+            p = Path(str(item).strip())
+            if not p.is_absolute():
+                p = (BASE_DIR / p).resolve()
+            if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp"):
+                paths.append(p)
+        folder = BASE_DIR / "owner_faces"
+        if folder.is_dir():
+            for p in sorted(folder.iterdir()):
+                if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp", ".bmp"):
+                    paths.append(p.resolve())
+        seen: set[str] = set()
+        uniq: list[Path] = []
+        for p in paths:
+            key = str(p)
+            if key not in seen:
+                seen.add(key)
+                uniq.append(p)
+        return uniq
+
+    def _reload(self) -> None:
+        self._encodings = []
+        self._load_error = None
+        if not self.enabled:
+            self._load_error = "face_recognition not installed. pip install face_recognition"
+            return
+        paths = self._collect_image_paths()
+        if not paths:
+            self._load_error = "No owner photos: add images to owner_faces/ or set owner_face_images in jarvis_config.json"
+            return
+        for p in paths:
+            try:
+                img = face_recognition.load_image_file(str(p))
+                encs = face_recognition.face_encodings(img, num_jitters=1)
+                if encs:
+                    self._encodings.append(encs[0])
+            except Exception as e:
+                print(f"[FaceRec] skip {p.name}: {e}")
+        if not self._encodings:
+            self._load_error = "Could not extract a face from owner photos. Use clear front-facing selfies."
+
+    def reload(self) -> None:
+        self._reload()
+
+    def is_ready(self) -> bool:
+        return bool(self._encodings)
+
+    def status(self) -> str:
+        if not self.enabled:
+            return self._load_error or "Face recognition disabled."
+        if self._load_error and not self._encodings:
+            return self._load_error
+        return f"Owner face profile: {len(self._encodings)} encoding(s) loaded."
+
+    def identify_primary(self, bgr, face_boxes: list) -> str:
+        """
+        Returns short label: OWNER | STRANGER | NO_FACE | NO_PROFILE
+        """
+        if not self.enabled or not face_recognition:
+            return "NO_PROFILE"
+        if not self._encodings:
+            return "NO_PROFILE"
+        if not face_boxes:
+            return "NO_FACE"
+        import numpy as np
+
+        x, y, w, h = max(face_boxes, key=lambda b: int(b[2]) * int(b[3]))
+        H, W = bgr.shape[:2]
+        pad_x = int(w * 0.12)
+        pad_y = int(h * 0.12)
+        x0 = max(0, x - pad_x)
+        y0 = max(0, y - pad_y)
+        x1 = min(W, x + w + pad_x)
+        y1 = min(H, y + h + pad_y)
+        crop = bgr[y0:y1, x0:x1]
+        if crop.size == 0:
+            return "NO_FACE"
+        if cv2 is not None:
+            rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        else:
+            rgb = crop[:, :, ::-1].copy()
+        try:
+            locs = face_recognition.face_locations(rgb, model="hog")
+            if not locs:
+                return "NO_FACE"
+            encs = face_recognition.face_encodings(rgb, known_face_locations=locs, num_jitters=0)
+            if not encs:
+                return "NO_FACE"
+            dists = face_recognition.face_distance(self._encodings, encs[0])
+            best = float(np.min(dists)) if len(dists) else 1.0
+        except Exception as e:
+            print(f"[FaceRec] {e}")
+            return "NO_FACE"
+        return "OWNER" if best <= self.tolerance else "STRANGER"
+
+
+# ═══════════════════════════════════════════════════════════════
 #  WEATHER MODULE
 # ═══════════════════════════════════════════════════════════════
 class WeatherModule:
@@ -2229,34 +3190,10 @@ class NewsModule:
         if not requests:
             return "requests package not installed."
 
-        # Prefer NewsAPI when key is set, otherwise fall back to Google News RSS (no key).
         headers = {
-            "User-Agent": "JARVIS/2.0 (+local assistant)",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/xml, application/xml;q=0.9, */*;q=0.8",
         }
-        if self.enabled and self.key:
-            try:
-                params = {"apiKey": self.key, "country": country, "pageSize": 5}
-                if query:
-                    params["q"] = query
-                r = requests.get("https://newsapi.org/v2/top-headlines", params=params, headers=headers, timeout=6)
-                payload = r.json() if r.headers.get("content-type", "").lower().startswith("application/json") else {}
-                if r.status_code != 200:
-                    msg = ""
-                    try:
-                        msg = str(payload.get("message", "")).strip()
-                    except Exception:
-                        msg = ""
-                    raise RuntimeError(f"NewsAPI HTTP {r.status_code}" + (f": {msg}" if msg else ""))
-                articles = (payload or {}).get("articles", [])[:4]
-                if not articles:
-                    return "No headlines found."
-                return "Headlines: " + " | ".join(a.get("title", "").strip() for a in articles if a.get("title")) + "."
-            except Exception as e:
-                # Fall through to RSS as a recovery path.
-                last_err = str(e)
-        else:
-            last_err = ""
 
         try:
             import xml.etree.ElementTree as ET
@@ -2271,8 +3208,15 @@ class NewsModule:
                 params = {"hl": "en-IN", "gl": "IN", "ceid": "IN:en"}
 
             r = requests.get(url, params=params, headers=headers, timeout=8)
-            xml = r.text or ""
-            root = ET.fromstring(xml)
+            r.raise_for_status()  # Check for 403, 429, etc.
+            
+            xml_data = r.text or ""
+            
+            # Additional debug for the terminal if the response is suspicious
+            if "<rss" not in xml_data:
+                print(f"[News RSS] Warning: Google returned a non-RSS response. Status: {r.status_code}")
+                
+            root = ET.fromstring(xml_data)
             titles = []
             for item in root.findall(".//item"):
                 t = item.findtext("title") or ""
@@ -2285,11 +3229,12 @@ class NewsModule:
                 if len(titles) >= 4:
                     break
             if not titles:
+                print(f"[News RSS] Warning: No <item> tags found in XML. Content snippet: {xml_data[:300]}")
                 return "No headlines found."
             return "Headlines: " + " | ".join(titles) + "."
         except Exception as e:
-            extra = f" (NewsAPI error: {last_err})" if last_err else ""
-            return f"News fetch failed: {e}{extra}"
+            print(f"[News RSS] Exception: {e}")
+            return f"News fetch failed: {e}"
 
 # ═══════════════════════════════════════════════════════════════
 #  LOCATION MODULE — IP geolocation + GPS via browser API
@@ -2484,12 +3429,22 @@ class CalendarModule:
 # ═══════════════════════════════════════════════════════════════
 class Intent:
     MAP = {
+        "send_whatsapp":  ["send whatsapp", "whatsapp message", "message on whatsapp", "send a whatsapp", "send message on whatsapp"],
+        "send_message":   ["send message to", "message to", "message someone", "send a message", "send text to", "text to"],
+        "whatsapp_unread": ["unread whatsapp", "whatsapp unread", "whatsapp unread messages", "check whatsapp", "latest whatsapp", "show whatsapp message", "whatsapp message kya hai"],
+        "whatsapp_read":  ["read whatsapp", "whatsapp incoming", "incoming whatsapp", "read whatsapp messages", "whatsapp messages", "whatsapp receive", "message aayi", "incoming message"],
+        "media_control":  ["play music", "pause music", "resume music", "play song", "pause song", "play spotify", "pause spotify", "next song", "next track", "skip song", "spotify", "gaana", "play gaana", "pause gaana", "next gaana", "skip track"],
+        "screen_read":    ["kya likha hai screen pe","what is on screen","read screen","read text on screen","screen pe kya likha hai","screen text","read screen text"],
         "open_app":       ["open","launch","start","run"],
+        "close_app":      ["close","quit","exit","stop","kill","terminate"],
+        "list_files":     ["list files","show files","files in","directory","folder contents","what files"],
+        "download_file":  ["download file","send file","get file","upload file"],
         "hardware":       ["cpu","ram","memory","disk","battery","hardware","system status","performance"],
         "thermal_status": ["cpu temp","cpu temps","cpu temperature","gpu temp","gpu temps","gpu temperature","thermal status","thermal report","system temperature","temperatures","fan rpm","fan speed","cooling status"],
         "fan_control":    ["speed up fan","increase fan","boost fan","cooler fan","fan mode","cooling mode","max fan","open omen","omen gaming hub","victus cooling","victus fan"],
         "network":        ["network","ip","internet","wifi","connection"],
         "email_check":    ["check email","emails","inbox","unread mail","any mail","new mail"],
+        "email_unread":   ["unread email","email unread","check unread email","show unread mail","new unread mail","unread inbox"],
         "send_email":     ["send email","send mail","email to","compose","write email"],
         "calendar_today": ["today's schedule","today's events","what's today","schedule today"],
         "calendar_upcoming": ["upcoming","this week","next week","my schedule"],
@@ -2560,6 +3515,161 @@ class Greeter:
         ])
 
 # ═══════════════════════════════════════════════════════════════
+#  TELEGRAM BOT MODULE
+# ═══════════════════════════════════════════════════════════════
+class TelegramBotModule:
+    def __init__(self, cfg: dict, jarvis_instance=None):
+        self.cfg = cfg
+        self.jarvis = jarvis_instance
+        self.token = str(cfg.get("telegram_bot_token", "")).strip()
+        self.allowed_user_id = cfg.get("telegram_allowed_user_id")
+        self.enabled = bool(self.token and self.allowed_user_id and cfg.get("telegram_enabled", False))
+        self.api_url = f"https://api.telegram.org/bot{self.token}"
+        self._offset = 0
+        self._running = False
+        self._thread = None
+        if self.enabled:
+            self._start_polling()
+
+    def _send_message(self, chat_id: int, text: str) -> bool:
+        if not self.enabled or not requests:
+            return False
+        try:
+            payload = {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown",
+            }
+            resp = requests.post(f"{self.api_url}/sendMessage", json=payload, timeout=5)
+            return resp.status_code == 200
+        except Exception as e:
+            print(f"[WARN] Telegram send failed: {e}")
+            return False
+
+    def _send_file(self, chat_id: int, file_path: str, caption: str = None) -> bool:
+        """Send a file to Telegram chat."""
+        if not self.enabled or not requests:
+            return False
+        try:
+            with open(file_path, 'rb') as f:
+                files = {'document': f}
+                data = {'chat_id': chat_id}
+                if caption:
+                    data['caption'] = caption[:1024]  # Telegram caption limit
+                
+                resp = requests.post(f"{self.api_url}/sendDocument", 
+                                   files=files, data=data, timeout=30)
+                return resp.status_code == 200
+        except Exception as e:
+            print(f"[WARN] Telegram file send failed: {e}")
+            return False
+
+    def _get_updates(self) -> list:
+        if not self.enabled or not requests:
+            return []
+        try:
+            resp = requests.get(f"{self.api_url}/getUpdates?offset={self._offset}&timeout=10", timeout=15)
+            if resp.status_code == 200:
+                return resp.json().get("result", [])
+        except Exception as e:
+            print(f"[WARN] Telegram getUpdates failed: {e}")
+        return []
+
+    def _process_update(self, update: dict) -> None:
+        if not self.jarvis:
+            return
+        try:
+            message = update.get("message", {})
+            chat_id = message.get("chat", {}).get("id")
+            user_id = message.get("from", {}).get("id")
+            text = message.get("text", "").strip()
+
+            # Security: only allow the configured user
+            if user_id != self.allowed_user_id:
+                self._send_message(chat_id, "🔒 Unauthorized access attempt blocked.")
+                return
+
+            if not text:
+                return
+
+            # Process command via JARVIS
+            self._send_message(chat_id, f"🔄 Processing: {text[:50]}...")
+            self.jarvis._is_telegram_context = True
+            try:
+                response = self.jarvis.handle(text)
+            finally:
+                self.jarvis._is_telegram_context = False
+            response_text = str(response or "Command executed.").strip()[:4096]
+            self._send_message(chat_id, response_text if response_text else "✅ Done.")
+            
+            # Check if there's a file to send
+            if hasattr(self.jarvis, '_telegram_file_to_send') and self.jarvis._telegram_file_to_send:
+                file_path, caption = self.jarvis._telegram_file_to_send
+                self._send_message(chat_id, f"📤 Sending file...")
+                if self._send_file(chat_id, file_path, caption):
+                    self._send_message(chat_id, "✅ File sent successfully!")
+                else:
+                    self._send_message(chat_id, "❌ Failed to send file.")
+                # Clear the file to send
+                self.jarvis._telegram_file_to_send = None
+        except Exception as e:
+            print(f"[WARN] Telegram update processing failed: {e}")
+
+    def _polling_worker(self) -> None:
+        print("[INFO] Telegram bot polling started.")
+        while self._running:
+            try:
+                updates = self._get_updates()
+                for update in updates:
+                    self._offset = update.get("update_id", 0) + 1
+                    self._process_update(update)
+                if not updates:
+                    time.sleep(1)
+            except Exception as e:
+                print(f"[WARN] Telegram polling error: {e}")
+                time.sleep(2)
+
+    def _start_polling(self) -> None:
+        if not self.enabled or self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(target=self._polling_worker, daemon=True)
+        self._thread.start()
+        print(f"[INFO] Telegram bot initialized. Listening for messages from user {self.allowed_user_id}.")
+
+    def stop(self) -> None:
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2)
+
+    def notify(self, message: str) -> bool:
+        if not self.enabled:
+            return False
+        return self._send_message(self.allowed_user_id, message)
+
+    def wait_for_reply(self, timeout: int = 60) -> str | None:
+        if not self.enabled:
+            return None
+        import time
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                updates = self._get_updates()
+                for update in updates:
+                    self._offset = update.get("update_id", 0) + 1
+                    message = update.get("message", {})
+                    user_id = message.get("from", {}).get("id")
+                    text = message.get("text", "").strip()
+                    if user_id == self.allowed_user_id and text:
+                        return text
+                if not updates:
+                    time.sleep(1)
+            except Exception:
+                time.sleep(1)
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════
 #  JARVIS CORE
 # ═══════════════════════════════════════════════════════════════
 class JARVIS:
@@ -2582,6 +3692,10 @@ class JARVIS:
         self.system   = SystemModule(self.cfg)
         self.camera   = CameraModule(self.cfg)
         self.email    = EmailModule(self.cfg)
+        self.whatsapp = WhatsAppModule(self.cfg)
+        self.telegram = None  # Initialize placeholder
+        self.contacts = ContactsModule(self.cfg)
+        self.owner_face = OwnerFaceRecognizer(self.cfg)
         self.weather  = WeatherModule(self.cfg)
         self.news     = NewsModule(self.cfg)
         self.location = LocationModule(self.cfg)
@@ -2591,6 +3705,10 @@ class JARVIS:
         self.wakes    = self.cfg.get("wake_words",["jarvis","hey jarvis"])
         self._running = True
         self.text_mode = False
+        self._is_telegram_context = False
+        self._telegram_file_to_send = None
+        self.ai.voice_engine = self.voice
+        self.telegram = TelegramBotModule(self.cfg, jarvis_instance=self)  # Initialize after JARVIS is ready
 
         try:
             print("  [OK] All systems online.\n")
@@ -2690,6 +3808,31 @@ class JARVIS:
             app = re.sub(r"\b(open|launch|start|run|execute)\b","",lower,flags=re.I).strip()
             resp = self.system.open_app(app or "chrome")
 
+        # ── CLOSE APP ─────────────────────────────────
+        elif intent == "close_app":
+            app = re.sub(r"\b(close|quit|exit|stop|kill|terminate)\b","",lower,flags=re.I).strip()
+            resp = self.system.close_app(app or "")
+
+        # ── LIST FILES ────────────────────────────────
+        elif intent == "list_files":
+            path = re.sub(r"\b(list|show|files|in|directory|folder|contents|what)\b","",lower,flags=re.I).strip()
+            resp = self.system.list_files_telegram(path or None)
+
+        # ── DOWNLOAD FILE ─────────────────────────────
+        elif intent == "download_file":
+            file_path = re.sub(r"\b(download|send|get|upload|file)\b","",lower,flags=re.I).strip()
+            file_path, caption = self.system.download_file_telegram(file_path)
+            if file_path:
+                # For Telegram context, we'll handle file sending differently
+                if hasattr(self, '_is_telegram_context') and self._is_telegram_context:
+                    # Store file info for Telegram bot to handle
+                    self._telegram_file_to_send = (file_path, caption)
+                    resp = f"Preparing to send: {caption}"
+                else:
+                    resp = f"File ready: {caption}"
+            else:
+                resp = caption
+
         # ── HARDWARE ──────────────────────────────────
         elif intent == "hardware":
             resp = self.system.hardware_report()
@@ -2707,18 +3850,67 @@ class JARVIS:
             resp = self.system.top_processes()
 
         # ── EMAIL ─────────────────────────────────────
-        elif intent == "email_check":
+        elif intent in ("email_check", "email_unread"):
             self.voice.speak("Checking your inbox...")
             resp = self.email.check_inbox(5)
 
         elif intent == "send_email":
-            self.voice.speak("To whom?")
-            to = self.listen_or_type()
-            self.voice.speak("Subject?")
-            sub = self.listen_or_type()
-            self.voice.speak("What should I say?")
-            body = self.listen_or_type()
+            if getattr(self, "_is_telegram_context", False) and self.telegram:
+                self.telegram.notify("To whom?")
+                to = self.telegram.wait_for_reply()
+                if not to: return "Email cancelled."
+                self.telegram.notify("Subject?")
+                sub = self.telegram.wait_for_reply()
+                if not sub: return "Email cancelled."
+                self.telegram.notify("What should I say?")
+                body = self.telegram.wait_for_reply()
+                if not body: return "Email cancelled."
+            else:
+                self.voice.speak("To whom?")
+                to = self.listen_or_type()
+                self.voice.speak("Subject?")
+                sub = self.listen_or_type()
+                self.voice.speak("What should I say?")
+                body = self.listen_or_type()
             resp = self.email.send_email(to, sub, body) if all([to,sub,body]) else "Email cancelled."
+
+        elif intent in ("send_whatsapp", "send_message"):
+            if getattr(self, "_is_telegram_context", False) and self.telegram:
+                self.telegram.notify("Contact name or WhatsApp number?")
+                target = self.telegram.wait_for_reply()
+                if not target: return "WhatsApp message cancelled."
+                self.telegram.notify("What is the message?")
+                msg = self.telegram.wait_for_reply()
+                if not msg: return "WhatsApp message cancelled."
+            else:
+                self.voice.speak("Contact name or WhatsApp number?")
+                target = self.listen_or_type()
+                self.voice.speak("What is the message?")
+                msg = self.listen_or_type()
+            phone = ""
+            if target:
+                # If user spoke a name, try contacts.csv lookup
+                looked = self.contacts.lookup_phone(target)
+                phone = looked or target
+            resp = self.whatsapp.send_message(phone, msg) if phone and msg else "WhatsApp message cancelled."
+
+        elif intent in ("whatsapp_read", "whatsapp_unread"):
+            self.voice.speak("Reading WhatsApp screen text now.")
+            resp = self.whatsapp.read_incoming()
+
+        elif intent == "media_control":
+            if any(k in lower for k in ["next","skip"]):
+                resp = self.system.control_media("next")
+            elif any(k in lower for k in ["pause","stop"]):
+                resp = self.system.control_media("playpause")
+            elif any(k in lower for k in ["previous","prev","back"]):
+                resp = self.system.control_media("previous")
+            else:
+                resp = self.system.control_media("playpause")
+
+        elif intent == "screen_read":
+            self.voice.speak("Reading screen text now.")
+            resp = self.system.read_screen_text()
 
         # ── CALENDAR ──────────────────────────────────
         elif intent == "calendar_today":
