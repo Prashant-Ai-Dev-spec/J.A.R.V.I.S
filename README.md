@@ -2,45 +2,72 @@
 ## Just A Rather Very Intelligent System
 
 ```
-  ╔══════════════════════════════════════════════════════╗
-  ║   Built for Prashant | Powered by Groq Integration   ║
-  ╚══════════════════════════════════════════════════════╝
+  ╔══════════════════════════════════════════════════════════════╗
+  ║   Built by Prashant Bhagat  |  Powered by Claude AI + Groq  ║
+  ║   Bihar, India  |  Class 11 Student  |  Future AI Engineer  ║
+  ╚══════════════════════════════════════════════════════════════╝
 ```
+
+> *"Sometimes you gotta run before you can walk." — Tony Stark*
+
+---
+
+## 🎬 Demo
+
+> 📹 **[Watch JARVIS in action → YouTube Demo](#)** *(coming soon)*
 
 ---
 
 ## ✨ Features
 
-| Module          | What JARVIS Can Do |
-|----------------|---------------------|
-| 🎙️ Voice        | Wake word detection, STT via Google, TTS (JARVIS-like male voice) |
-| 🧠 AI Brain     | Anthropic Claude — full conversational intelligence |
-| 💻 System       | Open apps, file explorer, hardware monitor, volume, screenshot |
-| 📧 Email        | Check unread Gmail, send emails by voice |
-| 📅 Calendar     | Today/upcoming events, add events, open Google Calendar |
-| 🌤️ Weather      | Real-time weather + forecast (OpenWeatherMap) |
-| 📰 News         | Top headlines, topic-specific news (NewsAPI) |
-| 📝 Notes        | Voice notes, saved locally as JSON |
-| ⏰ Reminders    | Set timed voice reminders |
-| 🔍 File Search  | Search your entire file system by name |
-| 🔒 Power        | Lock, shutdown, restart — with confirmation |
-| 🌐 Web          | Google search, open YouTube/GitHub/Gmail instantly |
+| Module | What JARVIS Can Do |
+|---|---|
+| 🎙️ Voice | Wake word detection (OpenWakeWord / Google STT), TTS male voice |
+| 🧠 AI Brain | Claude AI + Groq — full conversational intelligence, memory |
+| 💻 System | Open 92+ apps, hardware monitor, volume, screenshot, file search |
+| 📧 Email | Check unread Gmail, send emails by voice |
+| 📅 Calendar | Today/upcoming events, add events, Google Calendar |
+| 🌤️ Weather | Real-time weather + forecast (OpenWeatherMap) |
+| 📰 News | Top headlines, topic-specific news (NewsAPI) |
+| 📝 Notes | Voice notes, reminders, saved as JSON |
+| 📷 Camera | Live camera feed with HUD overlay, 5 vision modes, face detection |
+| 💬 WhatsApp | Send WhatsApp messages by voice via pywhatkit |
+| 📱 Telegram Bot | Control JARVIS from your phone via Telegram |
+| 🌐 HTTP Server | Mobile app integration via Flask REST API |
+| 🔍 OCR | Read screen content using Tesseract |
+| 🤖 Offline LLM | Ollama fallback when internet is down |
+| 🔒 Power | Lock, shutdown, restart PC with voice confirmation |
+
+---
+
+## 🖥️ GUI Screenshots
+
+```
+┌─────────────────────────────────────────────────────┐
+│  J.A.R.V.I.S HUD  ── Iron Man style dark interface  │
+│  ┌─────────────┐  ┌──────────────────┐  ┌─────────┐ │
+│  │ Camera Feed │  │   Chat / AI      │  │  Stats  │ │
+│  │ + HUD modes │  │   Interface      │  │  Radar  │ │
+│  └─────────────┘  └──────────────────┘  └─────────┘ │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Install dependencies
+### 1. Clone the repo
 
-**Windows:**
-```
-setup_windows.bat
-```
-
-**Linux / macOS:**
 ```bash
-chmod +x setup_unix.sh
-./setup_unix.sh
+git clone https://github.com/pk6861172-lab/J.A.R.V.I.S.git
+cd J.A.R.V.I.S
+```
+
+### 2. Install dependencies
+
+**Windows (recommended):**
+```bash
+setup_windows.bat
 ```
 
 **Manual:**
@@ -48,103 +75,148 @@ chmod +x setup_unix.sh
 pip install -r requirements.txt
 ```
 
+> ⚠️ **Python 3.10.x recommended.** Python 3.12 will break `dlib` / `face_recognition`.
+
 ---
 
-### 2. Configure JARVIS
+### 3. Configure JARVIS
 
-Edit `jarvis_config.json`:
+Copy `jarvis_config.template.json` → rename to `jarvis_config.json` and fill in:
 
 ```json
 {
-  "user_name": "Prashant",
-  "anthropic_api_key": "sk-ant-...",        ← Get from console.anthropic.com
-  "openweather_api_key": "...",              ← Free at openweathermap.org
-  "news_api_key": "...",                     ← Free at newsapi.org
-  "email": "prashant@gmail.com",
-  "email_password": "xxxx xxxx xxxx xxxx"   ← Gmail App Password (not your login!)
+  "user_name": "YourName",
+  "groq_api_key": "get from console.groq.com — FREE",
+  "openweather_api_key": "free at openweathermap.org",
+  "news_api_key": "free at newsapi.org",
+  "email": "your@gmail.com",
+  "email_password": "Gmail App Password (NOT your login password)",
+  "telegram_bot_token": "get from @BotFather on Telegram",
+  "telegram_allowed_user_id": 0
 }
 ```
 
-#### Gmail App Password Setup:
-1. Go to myaccount.google.com → Security
+#### Get API Keys (all free):
+| Service | Link |
+|---|---|
+| Groq AI | [console.groq.com](https://console.groq.com) |
+| OpenWeatherMap | [openweathermap.org/api](https://openweathermap.org/api) |
+| NewsAPI | [newsapi.org](https://newsapi.org) |
+| Telegram Bot | Message `@BotFather` on Telegram |
+
+#### Gmail App Password:
+1. myaccount.google.com → Security
 2. Enable 2-Step Verification
-3. Go to "App Passwords" → Generate one for "Mail"
-4. Paste that 16-character password in `email_password`
+3. App Passwords → Generate for "Mail"
+4. Paste 16-char password in config
 
 ---
 
-### 3. Run JARVIS
+### 4. Run JARVIS
 
 ```bash
-# Hybrid mode (voice + type fallback) — RECOMMENDED
+# GUI mode (recommended) — Iron Man HUD interface
+python jarvis_gui.py
+
+# Hybrid mode (voice + text fallback)
 python jarvis.py --mode hybrid
 
-# Voice only (wake word: "JARVIS")
-python jarvis.py --mode voice
-
-# Text only (no microphone)
+# Text only (no microphone needed)
 python jarvis.py --mode text
+
+# Telegram bot only (control from phone)
+python run_jarvis_bot.py
 ```
 
 ---
 
-## 🎙️ Voice Commands Reference
+## 🎙️ Voice Commands
 
-### System
-| Say                              | Action                        |
-|----------------------------------|-------------------------------|
-| "JARVIS, open Chrome"            | Launches Chrome               |
-| "Open VS Code"                   | Launches VS Code              |
-| "System status"                  | CPU, RAM, disk, battery       |
-| "Network info"                   | IP address, data stats        |
-| "Take a screenshot"              | Saves screenshot to Pictures  |
-| "Set volume to 70"               | Sets system volume            |
-| "Lock the screen"                | Locks your PC                 |
-| "Shutdown"                       | Schedules shutdown (confirmed)|
-| "Find file budget"               | Searches for files matching   |
+### System Control
+| Say | Action |
+|---|---|
+| "Open Chrome / VS Code / Kali..." | Launches any of 92+ apps |
+| "System status" | CPU, RAM, disk, battery |
+| "Take a screenshot" | Saves to Pictures |
+| "Set volume to 70" | Sets system volume |
+| "Lock the screen" | Locks PC |
+| "Shutdown / Restart" | Power control with confirmation |
+| "Find file [name]" | Search entire file system |
 
-### Email & Calendar
-| Say                              | Action                        |
-|----------------------------------|-------------------------------|
-| "Check my emails"                | Reads latest unread emails    |
-| "Send email to John"             | Guided email composition      |
-| "What's on my calendar today"    | Today's events                |
-| "My upcoming schedule"           | Next 7 days                   |
-| "Add event Meeting tomorrow"     | Adds to local calendar        |
-| "Open Google Calendar"           | Opens in browser              |
+### Email & Communication
+| Say | Action |
+|---|---|
+| "Check my emails" | Reads unread Gmail |
+| "Send email to [name]" | Guided email composition |
+| "Send WhatsApp to [contact]" | Sends WhatsApp message |
 
 ### Info & Productivity
-| Say                              | Action                        |
-|----------------------------------|-------------------------------|
-| "What's the weather"             | Current weather               |
-| "Weather in Mumbai"              | Weather for specific city     |
-| "Top news today"                 | Latest headlines              |
-| "News about AI"                  | Topic-specific news           |
-| "Take a note: buy groceries"     | Saves voice note              |
-| "Read my notes"                  | Reads saved notes             |
-| "Remind me in 10 minutes"        | Sets a timed reminder         |
+| Say | Action |
+|---|---|
+| "What's the weather" | Current weather |
+| "Top news today" | Latest headlines |
+| "News about AI" | Topic-specific news |
+| "Take a note: [text]" | Saves voice note |
+| "Remind me in 10 minutes" | Timed reminder |
+| "Read my screen" | OCR screen content |
+
+### Camera & Vision
+| Say | Action |
+|---|---|
+| "Start camera" | Live feed with HUD |
+| "Capture photo" | Saves frame |
+| "Describe what you see" | AI vision analysis |
 
 ### AI Conversation
-Anything not matched above goes to Claude AI — ask JARVIS anything:
+Anything else goes directly to Claude AI:
 - "Explain recursion to me"
-- "Help me write a Python function to..."
+- "Help me write a Python function"
 - "What's the difference between TCP and UDP?"
-- "Motivate me for JEE prep"
+- "Solve this JEE Math problem..."
+
+---
+
+## 📱 Telegram Bot Control
+
+Control JARVIS remotely from your phone:
+
+1. Create bot via `@BotFather` → get token
+2. Get your ID via `@userinfobot`
+3. Add both to `jarvis_config.json`
+4. Run `python run_jarvis_bot.py`
+
+| Telegram Command | Action |
+|---|---|
+| `/start` | Show available commands |
+| `/screenshot` | Get live PC screenshot |
+| `system status` | Hardware report |
+| `open chrome` | Launch app remotely |
+| `weather` | Current weather |
+| Any text | Full JARVIS AI response |
 
 ---
 
 ## 🗂️ File Structure
 
 ```
-jarvis/
-├── jarvis.py              ← Main assistant (all-in-one)
-├── jarvis_config.json     ← Your personal config & API keys
-├── requirements.txt       ← Python dependencies
-├── setup_windows.bat      ← Windows auto-installer
-├── setup_unix.sh          ← Linux/macOS auto-installer
-├── jarvis_events.json     ← Calendar events (auto-created)
-├── jarvis_notes.json      ← Notes (auto-created)
-└── jarvis_reminders.json  ← Reminders (auto-created)
+J.A.R.V.I.S/
+├── jarvis.py                  ← Core AI engine
+├── jarvis_gui.py              ← Iron Man HUD GUI
+├── jarvis_gui_perf.py         ← Performance-optimized GUI
+├── run_jarvis_bot.py          ← Telegram bot runner
+├── jarvis_config.template.json← Config template (safe to share)
+├── requirements.txt           ← Python dependencies
+├── setup_windows.bat          ← Windows auto-installer
+├── contacts.csv               ← Contact list for WhatsApp
+├── .gitignore                 ← Protects your API keys
+├── .env.example               ← Environment vars template
+│
+├── ANDROID/                   ← Mobile app (Kivy)
+│   ├── main.py
+│   └── buildozer.spec
+│
+└── assets/                    ← Icons, sounds (optional)
+    └── jarvis.ico
 ```
 
 ---
@@ -152,6 +224,7 @@ jarvis/
 ## 🛠️ Adding Custom Apps
 
 In `jarvis_config.json`:
+
 ```json
 "custom_apps": {
   "pycharm":    "pycharm",
@@ -160,40 +233,75 @@ In `jarvis_config.json`:
   "obs":        "obs"
 }
 ```
+
 Then say: *"JARVIS, open Burpsuite"* ✓
 
 ---
 
 ## 🔧 Troubleshooting
 
-**PyAudio fails to install on Windows:**
-```bash
-pip install pipwin
-pipwin install pyaudio
+| Problem | Fix |
+|---|---|
+| PyAudio install fails | `pip install pipwin` then `pipwin install pyaudio` |
+| Microphone not detected | Settings → Privacy → Microphone → Allow apps |
+| JSON config error | Check for single `\` in file paths — use `\\` |
+| face_recognition install fails | Use Python 3.10, not 3.12. Install dlib first |
+| Telegram bot not responding | Check token and allowed_user_id in config |
+| OCR not working | Install Tesseract from [GitHub](https://github.com/UB-Mannheim/tesseract/wiki) and add to PATH |
+| Offline STT not working | Download Vosk model, set path in config |
+
+---
+
+## 🔒 Security Notes
+
+- **Never commit** `jarvis_config.json` — it contains your API keys
+- Use `jarvis_config.template.json` as a safe shareable version
+- `.gitignore` already excludes sensitive files
+- Rotate your API keys periodically
+
+---
+
+## 📦 Tech Stack
+
 ```
-Or download from: https://www.lfd.uci.edu/~gohlke/pythonlibs/#pyaudio
-
-**Microphone not detected:**
-- Check Windows Settings → Privacy → Microphone → Allow apps
-- Use `--mode text` to bypass mic completely
-
-**Voice sounds robotic:**
-- Windows: Go to Control Panel → Speech → Install additional voices
-- Try "Microsoft David" or "Microsoft Zira" voices
-
-**Email fails:**
-- Make sure you're using Gmail App Password, not your login password
-- Enable IMAP: Gmail Settings → See All Settings → Forwarding and POP/IMAP
+AI:        Claude AI (Anthropic) + Groq
+GUI:       Python Tkinter + OpenCV
+Voice:     SpeechRecognition + pyttsx3 + OpenWakeWord + Vosk
+Camera:    OpenCV + face_recognition
+APIs:      OpenWeatherMap + NewsAPI + pywhatkit
+Remote:    python-telegram-bot + Flask
+Offline:   Ollama (local LLM)
+```
 
 ---
 
-## 🚀 Pro Tips
+## 🚀 Roadmap
 
-- Say **"JARVIS"** (2 syllables, clearly) for best wake word detection
-- Run in background: `pythonw jarvis.py` (Windows, no console window)
-- Add to Windows startup: place shortcut in `shell:startup`
-- For 4 AM sessions: JARVIS will detect morning and greet accordingly
+- [x] Voice control + wake word
+- [x] Gmail integration
+- [x] Weather + News APIs
+- [x] Camera + HUD + vision modes
+- [x] WhatsApp messaging
+- [x] Telegram bot
+- [x] Mobile app (Kivy)
+- [x] Offline STT (Vosk)
+- [x] Face recognition
+- [x] Ollama offline LLM
+- [ ] Custom trained wake word
+- [ ] Emotion detection (librosa)
+- [ ] Windows EXE package
+- [ ] Android APK release
+- [ ] Screen reader (OCR full)
 
 ---
 
-*"Sometimes you gotta run before you can walk." — Tony Stark*
+## 👨‍💻 About
+
+Built by **Prashant Bhagat** — Class 11 student from Bihar, India.  
+Aspiring AI/ML Engineer | Ethical Hacker | JEE 2027
+
+[![GitHub](https://img.shields.io/badge/GitHub-pk6861172--lab-black?logo=github)](https://github.com/pk6861172-lab)
+
+---
+
+*"I am JARVIS — Just A Rather Very Intelligent System."*
