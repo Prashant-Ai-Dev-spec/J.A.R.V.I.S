@@ -32,3 +32,18 @@ sounddevice>=0.4.6
 
 # Clipboard
 pyperclip>=1.8.2
+
+# Offline wake word + offline speech recognition + WhatsApp
+numpy>=1.26.0
+vosk>=0.3.45
+openwakeword>=0.6.0
+onnxruntime>=1.17.0
+pywhatkit>=5.4
+
+# Face recognition (requires CMake + C++ build tools on Windows for dlib)
+face_recognition>=1.3.0
+dlib>=19.24.0
+
+# Voice affect / prosody features (mood heuristics)
+librosa>=0.10.0
+soundfile>=0.12.0
