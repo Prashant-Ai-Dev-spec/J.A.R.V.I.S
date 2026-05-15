@@ -1,0 +1,35 @@
+# Secrets and local config
+.env
+env
+jarvis_config.json
+
+# Personal runtime data
+jarvis_ai_history.json
+jarvis_ai_memory.json
+jarvis_notes.json
+jarvis_reminders.json
+jarvis_events.json
+PyWhatKit_DB.txt
+owner_faces/
+jarvis_photos/
+
+# Build outputs
+build/
+dist/
+*.spec.bak
+mobile/android/.buildozer/
+mobile/android/.buildozer-venv/
+mobile/android/bin/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# OS/editor
+.vscode/
+Thumbs.db
+desktop.ini

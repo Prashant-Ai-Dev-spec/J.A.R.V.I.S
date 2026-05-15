@@ -11,6 +11,7 @@ import os
 from typing import Any, Callable, Dict, Optional
 import queue
 import math
+import random
 
 from . import persistence
 from backend import telemetry
@@ -29,20 +30,72 @@ _shutdown = threading.Event()
 # Worker pool size (bounded)
 _WORKER_COUNT = max(2, min(4, (os.cpu_count() or 2)))
 
+# Optional SQLite-backed durable queue. If available, tasks will be persisted
+# in a local SQLite DB so queued work survives process restarts. Functions are
+# stored by name in the DB and must be registered in _func_registry to execute.
+_use_sql = False
+_sql_queue = None
+_func_registry: Dict[str, Callable[..., Any]] = {}
+
+try:
+    from . import sql_queue as sql_queue_mod
+    db_path = os.path.join(os.path.dirname(__file__), 'dispatch.db')
+    sql_queue_mod.init_db(db_path)
+    _use_sql = True
+    _sql_queue = sql_queue_mod
+except Exception:
+    _use_sql = False
+    _sql_queue = None
+
 
 def _worker_loop(worker_id: int):
+    """Worker loop that supports either the in-memory queue or the optional
+    SQLite-backed durable queue. When using SQLite the task's func is looked up
+    from _func_registry by name; if not found the task is marked failed.
+    """
     while not _shutdown.is_set():
-        try:
-            item = _task_queue.get(timeout=0.5)
-        except queue.Empty:
+        item = None
+        # Prefer SQL-backed queue if available
+        if _use_sql and _sql_queue is not None:
+            try:
+                item = _sql_queue.claim_next_task()
+                if item is None:
+                    time.sleep(0.2)
+                    continue
+            except Exception:
+                # fallback to in-memory queue on error
+                item = None
+        else:
+            try:
+                item = _task_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+        if item is None:
             continue
+
         rid = item['id']
-        func = item['func']
-        args = item.get('args', ())
-        kwargs = item.get('kwargs', {})
         attempts = item.get('attempts', 0)
         max_retries = item.get('retries', 0)
         backoff = item.get('backoff', 0.5)
+
+        # Resolve callable
+        func = None
+        if _use_sql and 'func_name' in item:
+            func_name = item.get('func_name')
+            func = _func_registry.get(func_name)
+            if func is None:
+                # cannot execute unknown function
+                try:
+                    _sql_queue.mark_failed(rid, f'unknown function: {func_name}')
+                except Exception:
+                    pass
+                continue
+        else:
+            func = item.get('func')
+
+        args = item.get('args', ())
+        kwargs = item.get('kwargs', {})
 
         with _lock:
             _tasks.setdefault(rid, {})
@@ -66,6 +119,11 @@ def _worker_loop(worker_id: int):
                     persistence.save_tasks(_tasks)
                 except Exception:
                     pass
+            if _use_sql and _sql_queue is not None:
+                try:
+                    _sql_queue.mark_done(rid, res)
+                except Exception:
+                    pass
             try:
                 telemetry.log_event('dispatch.task_done', {'id': rid, 'result': res})
             except Exception:
@@ -85,20 +143,42 @@ def _worker_loop(worker_id: int):
                 pass
             # retry logic
             if attempts <= max_retries and not _shutdown.is_set():
-                # exponential backoff
-                delay = backoff * (2 ** (attempts - 1)) if attempts > 0 else backoff
-                # cap delay
-                delay = min(delay, 30)
-                # requeue the task with updated attempts
-                item['attempts'] = attempts
-                # sleep before requeuing to avoid busy loop
-                time.sleep(delay)
+                # exponential backoff with jitter
+                base = backoff * (2 ** (attempts - 1)) if attempts > 0 else backoff
+                cap = 30
+                delay = min(base, cap)
                 try:
-                    _task_queue.put(item)
+                    jitter = random.uniform(0, 0.5 * delay) if delay > 0 else 0
+                except Exception:
+                    jitter = 0
+                delay = delay + jitter
+                try:
+                    telemetry.log_event('dispatch.retry', {'id': rid, 'attempts': attempts, 'delay': delay})
+                    telemetry.log_event('dispatch.retry_scheduled', {'id': rid, 'attempts': attempts, 'delay': delay})
                 except Exception:
                     pass
+                # requeue through SQL or in-memory queue
+                if _use_sql and _sql_queue is not None:
+                    try:
+                        # mark queued again; DB claim increments attempts on claim
+                        _sql_queue.requeue(rid)
+                    except Exception:
+                        pass
+                else:
+                    # update attempts on item and put back with delay
+                    item['attempts'] = attempts
+                    try:
+                        time.sleep(delay)
+                        _task_queue.put(item)
+                    except Exception:
+                        pass
         finally:
-            _task_queue.task_done()
+            # if this task originated from in-memory queue, mark done on queue
+            if not _use_sql:
+                try:
+                    _task_queue.task_done()
+                except Exception:
+                    pass
 
 
 # Start worker threads
@@ -118,12 +198,34 @@ def start_task(func: Callable[..., Any], args: Optional[tuple] = None, kwargs: O
     rid = str(uuid.uuid4())
     args = args or ()
     kwargs = kwargs or {}
+    func_name = getattr(func, '__name__', None)
+
+    # Register task in in-memory status map for compatibility and persistence snapshot
     with _lock:
         _tasks[rid] = {"status": "queued", "result": None, "error": None}
         try:
             persistence.save_tasks(_tasks)
         except Exception:
             pass
+
+    # If SQLite-backed queue is available and function has a name, use it
+    if _use_sql and _sql_queue is not None and func_name:
+        # register callable so workers can resolve it by name
+        _func_registry[func_name] = func
+        try:
+            telemetry.log_event('dispatch.task_queued', {'id': rid, 'func': func_name})
+        except Exception:
+            pass
+        try:
+            # Ensure args are JSON-serializable lists
+            arg_list = list(args) if isinstance(args, (list, tuple)) else [args]
+            _sql_queue.enqueue(rid, func_name, arg_list, kwargs or {}, retries=retries, backoff=backoff)
+            return rid
+        except Exception:
+            # fallback to in-memory queue
+            pass
+
+    # Default in-memory queue path
     try:
         telemetry.log_event('dispatch.task_queued', {'id': rid, 'func': getattr(func, '__name__', str(func))})
     except Exception:

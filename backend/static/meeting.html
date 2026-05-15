@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>J.A.R.V.I.S Meeting</title>
+  <style>video{width:300px;height:200px;border:1px solid #ccc;margin:5px}</style>
+</head>
+<body>
+  <h2>Meeting Room</h2>
+  <div>
+    <label>Room: <input id="room" value="main"></label>
+    <label>Username: <input id="username" value="tokenuser"></label>
+    <label>Password: <input id="password" type="password" value="tokenpass"></label>
+    <button id="join">Join</button>
+  </div>
+  <div id="controls" style="display:none">
+    <button id="leave">Leave</button>
+    <button id="record">Start Recording</button>
+  </div>
+  <div id="videos"></div>
+  <script src="/meeting.js"></script>
+</body>
+</html>

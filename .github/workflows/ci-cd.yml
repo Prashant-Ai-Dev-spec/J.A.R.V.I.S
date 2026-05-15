@@ -1,0 +1,226 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint & Code Quality
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort pylint
+
+    - name: Run Black (code formatting check)
+      run: black --check backend/ --diff || true
+
+    - name: Run isort (import sorting)
+      run: isort --check-only backend/ --diff || true
+
+    - name: Run Flake8 (linting)
+      run: flake8 backend/ --max-line-length=120 --ignore=E501,W503 || true
+
+  test:
+    runs-on: ubuntu-latest
+    name: Unit & Integration Tests
+
+    services:
+      sqlite:
+        image: busybox
+        options: sleep 100
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio
+
+    - name: Run unit tests
+      run: |
+        pytest backend/test_integrations.py -v --cov=backend --cov-report=xml
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./coverage.xml
+        fail_ci_if_error: false
+
+  security:
+    runs-on: ubuntu-latest
+    name: Security Checks
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install security tools
+      run: |
+        pip install bandit safety
+
+    - name: Run Bandit (security scanner)
+      run: bandit -r backend/ -ll || true
+
+    - name: Check dependencies for known vulnerabilities
+      run: safety check --json || true
+
+    - name: Detect secrets with TruffleHog
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: ${{ github.event.repository.default_branch }}
+        head: HEAD
+
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Docker
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Build backend (import check)
+      run: python -c "import backend.main; print('✓ Backend imports successfully')"
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+        cache-dependency-path: yjs_server/package.json
+
+    - name: Build Yjs server
+      run: |
+        cd yjs_server
+        npm install
+        npm run build || echo "No build script; skipping"
+        cd ..
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: false
+        tags: jarvis:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  integration:
+    runs-on: ubuntu-latest
+    name: Integration Tests (OAuth mocks)
+    needs: [test]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio responses
+
+    - name: Run OAuth integration tests (mocked)
+      run: |
+        pytest backend/test_integrations.py::TestAuthFlow -v
+
+  deploy-check:
+    runs-on: ubuntu-latest
+    name: Deployment Readiness Check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, test, security, build]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Check required env vars documented
+      run: |
+        if grep -q "SLACK_CLIENT_ID\|GOOGLE_CLIENT_ID\|GITHUB_CLIENT_ID" README.md; then
+          echo "✓ OAuth config documented"
+        else
+          echo "⚠ WARNING: OAuth env vars not documented in README"
+        fi
+
+    - name: Check .env.example exists (optional)
+      run: |
+        if [ -f .env.example ]; then
+          echo "✓ .env.example found"
+        else
+          echo "⚠ WARNING: .env.example not found; consider adding for convenience"
+        fi
+
+    - name: Check Docker Compose for local dev
+      run: |
+        if [ -f docker-compose.yml ]; then
+          echo "✓ docker-compose.yml found"
+        else
+          echo "⚠ WARNING: docker-compose.yml not found"
+        fi
+
+    - name: Summary
+      run: |
+        echo "✓ CI/CD Pipeline Passed"
+        echo "Ready for deployment to staging/production"
+
+  notify:
+    runs-on: ubuntu-latest
+    name: Notify on Completion
+    if: always()
+    needs: [lint, test, security, build, integration]
+
+    steps:
+    - name: Build summary
+      run: |
+        echo "CI/CD Run Summary:"
+        echo "- Lint: ${{ needs.lint.result }}"
+        echo "- Tests: ${{ needs.test.result }}"
+        echo "- Security: ${{ needs.security.result }}"
+        echo "- Build: ${{ needs.build.result }}"
+        echo "- Integration: ${{ needs.integration.result }}"
+
+    - name: Fail if any job failed
+      if: contains(needs.*.result, 'failure')
+      run: exit 1

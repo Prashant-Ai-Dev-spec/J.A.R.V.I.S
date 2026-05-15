@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#05070b">
+  <title>J.A.R.V.I.S Console</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1>J.A.R.V.I.S</h1>
+        <p id="health">Connecting...</p>
+      </div>
+      <button id="refreshStatus" class="icon-button" title="Refresh status" aria-label="Refresh status">R</button>
+    </header>
+
+    <section class="console-grid">
+      <section class="panel command-panel">
+        <div class="panel-head">
+          <h2>Command</h2>
+          <label class="switch">
+            <input id="speakToggle" type="checkbox">
+            <span>Speak</span>
+          </label>
+        </div>
+        <textarea id="commandInput" rows="4" placeholder="Ask JARVIS..."></textarea>
+        <div class="actions">
+          <button id="sendCommand" class="primary">Send</button>
+          <button id="clearLog">Clear</button>
+        </div>
+        <div class="token-row">
+          <input id="tokenInput" type="password" placeholder="LAN token">
+          <button id="saveToken">Save</button>
+        </div>
+      </section>
+
+      <section class="panel status-panel">
+        <div class="panel-head">
+          <h2>System</h2>
+          <span id="platform">--</span>
+        </div>
+        <div class="metrics">
+          <div><span>CPU</span><strong id="cpu">--</strong></div>
+          <div><span>RAM</span><strong id="ram">--</strong></div>
+          <div><span>Disk</span><strong id="disk">--</strong></div>
+          <div><span>Location</span><strong id="location">--</strong></div>
+        </div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="panel-head">
+          <h2>Transcript</h2>
+          <span id="pending">Ready</span>
+        </div>
+        <div id="log" class="log"></div>
+      </section>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

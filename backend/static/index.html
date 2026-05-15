@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>J.A.R.V.I.S CoWork Chat Demo</title>
+</head>
+<body>
+  <h2>J.A.R.V.I.S CoWork Chat Demo</h2>
+  <div>
+    <label>Username: <input id="username" value="tokenuser"></label>
+    <label>Password: <input id="password" type="password" value="tokenpass"></label>
+    <button id="login">Login</button>
+  </div>
+  <div id="chat" style="display:none">
+    <div id="messages" style="border:1px solid #ccc; height:200px; overflow:auto"></div>
+    <input id="msg" placeholder="Type message"><button id="send">Send</button>
+    <hr>
+    <div>
+      <input type="file" id="fileinput"><button id="upload">Upload</button>
+      <h4>Your files</h4>
+      <ul id="files"></ul>
+    </div>
+  </div>
+  <script src="/client.js"></script>
+</body>
+</html>

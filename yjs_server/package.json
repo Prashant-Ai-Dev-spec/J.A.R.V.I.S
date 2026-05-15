@@ -1,0 +1,12 @@
+{
+  "name": "j-a-r-v-i-s-yjs-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "y-websocket": "^1.4.5",
+    "ws": "^8.13.0"
+  }
+}

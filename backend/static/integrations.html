@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Integrations</title></head>
+<body>
+  <h2>Integrations</h2>
+  <div>
+    <h3>Slack</h3>
+    <a href="/integrations/slack/install">Install Slack App (OAuth)</a>
+    <form id="postForm">
+      <input id="channel" placeholder="#channel or user">
+      <input id="message" placeholder="Message">
+      <button type="button" id="post">Post to Slack</button>
+    </form>
+  </div>
+  <div>
+    <h3>Google Drive</h3>
+    <a href="/integrations/drive/install">Install Google Drive (OAuth)</a>
+    <a href="/integrations/drive/files">List Drive Files (requires token)</a>
+  </div>
+  <div>
+    <h3>GitHub</h3>
+    <a href="/integrations/github/install">Install GitHub (OAuth)</a>
+    <a href="/integrations/github/repos">List GitHub Repos (requires token)</a>
+  </div>
+  <script>
+  document.getElementById('post').onclick = async () => {
+    const ch = document.getElementById('channel').value
+    const msg = document.getElementById('message').value
+    const res = await fetch('/integrations/slack/post', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({channel: ch, text: msg})})
+    const j = await res.json()
+    alert(JSON.stringify(j))
+  }
+  </script>
+</body>
+</html>

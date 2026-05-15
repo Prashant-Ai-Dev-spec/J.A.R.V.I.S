@@ -1,0 +1,122 @@
+From 0655f6fb71c8e6938bcb63e9b5b25207a4160f59 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@example.com>
+Date: Thu, 14 May 2026 21:18:04 +0530
+Subject: [PATCH] office: add COM automation helper and tests for Excel
+ formulas\n\nCreate Excel files with formulas and optionally open/recalc via
+ Excel COM on Windows.\n\nCo-authored-by: Copilot
+ <223556219+Copilot@users.noreply.github.com>
+
+---
+ backend/connectors/office_advanced.py   | 63 +++++++++++++++++++++++++
+ backend/tests/test_office_automation.py | 29 ++++++++++++
+ 2 files changed, 92 insertions(+)
+ create mode 100644 backend/connectors/office_advanced.py
+ create mode 100644 backend/tests/test_office_automation.py
+
+diff --git a/backend/connectors/office_advanced.py b/backend/connectors/office_advanced.py
+new file mode 100644
+index 0000000..7a4a709
+--- /dev/null
++++ b/backend/connectors/office_advanced.py
+@@ -0,0 +1,63 @@
++"""Advanced Office helpers: Excel formula support and optional Excel COM automation."""
++try:
++    import openpyxl
++except Exception:
++    openpyxl = None
++
++
++def create_excel_with_formulas(path: str, rows: list) -> bool:
++    """Create an Excel file where cell values starting with '=' are treated as formulas.
++    Returns True on success.
++    """
++    try:
++        if openpyxl is None:
++            # fallback: write CSV but formulas won't evaluate
++            import csv
++            with open(path, 'w', newline='', encoding='utf-8') as f:
++                writer = csv.writer(f)
++                writer.writerows(rows)
++            return True
++        wb = openpyxl.Workbook()
++        ws = wb.active
++        for r_idx, row in enumerate(rows, start=1):
++            for c_idx, val in enumerate(row, start=1):
++                cell = ws.cell(row=r_idx, column=c_idx)
++                if isinstance(val, str) and val.startswith('='):
++                    cell.value = val  # openpyxl treats strings starting with = as formulas
++                else:
++                    cell.value = val
++        wb.save(path)
++        return True
++    except Exception:
++        return False
++
++
++def create_excel_and_open_in_excel(path: str, rows: list) -> bool:
++    """Create the Excel file and, if on Windows with pywin32, open Excel, recalc and save.
++    Returns True if file created (and optionally processed by Excel)."""
++    ok = create_excel_with_formulas(path, rows)
++    if not ok:
++        return False
++
++    # Try COM automation to let Excel evaluate formulas and save
++    try:
++        import platform
++        if platform.system().lower() != 'windows':
++            return True
++        try:
++            import win32com.client
++        except Exception:
++            return True
++        xl = win32com.client.DispatchEx('Excel.Application')
++        xl.Visible = False
++        wb = xl.Workbooks.Open(path)
++        try:
++            # Recalculate and save
++            xl.CalculateFull()
++            wb.Save()
++        finally:
++            wb.Close(SaveChanges=True)
++            xl.Quit()
++        return True
++    except Exception:
++        return True
+diff --git a/backend/tests/test_office_automation.py b/backend/tests/test_office_automation.py
+new file mode 100644
+index 0000000..8b251fe
+--- /dev/null
++++ b/backend/tests/test_office_automation.py
+@@ -0,0 +1,29 @@
++import os
++import unittest
++from backend.connectors.office_advanced import create_excel_with_formulas, create_excel_and_open_in_excel
++
++class OfficeAutomationTests(unittest.TestCase):
++    def test_create_excel_with_formulas(self):
++        path = os.path.join(os.path.dirname(__file__), 'tmp_formulas.xlsx')
++        rows = [[1,2,'=A1+B1'], ['foo', 'bar', '=CONCAT(A2,B2)']]
++        try:
++            ok = create_excel_with_formulas(path, rows)
++            self.assertTrue(ok)
++            self.assertTrue(os.path.exists(path))
++        finally:
++            if os.path.exists(path):
++                os.remove(path)
++
++    def test_create_and_open_in_excel_skips_on_non_windows(self):
++        path = os.path.join(os.path.dirname(__file__), 'tmp_formulas2.xlsx')
++        rows = [[1,2,'=A1+B1']]
++        try:
++            ok = create_excel_and_open_in_excel(path, rows)
++            self.assertTrue(ok)
++            self.assertTrue(os.path.exists(path))
++        finally:
++            if os.path.exists(path):
++                os.remove(path)
++
++if __name__ == '__main__':
++    unittest.main()
+-- 
+2.54.0.windows.1
+

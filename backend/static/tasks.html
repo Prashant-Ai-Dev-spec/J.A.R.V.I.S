@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tasks</title></head><body>
+<h2>Projects & Tasks</h2>
+<div>
+  <input id="pname" placeholder="Project name"><button id="createp">Create Project</button>
+</div>
+<div>
+  <h3>Create Task</h3>
+  <input id="pt" placeholder="Project ID"><input id="tt" placeholder="Title"><button id="createt">Create Task</button>
+</div>
+<ul id="projects"></ul>
+<ul id="tasks"></ul>
+<script>
+async function load(){
+  const r = await fetch('/projects'); const ps = await r.json(); document.getElementById('projects').innerHTML=''; ps.forEach(p=>{ const li=document.createElement('li'); li.textContent = p.id + ': '+p.name; document.getElementById('projects').appendChild(li) })
+  const t = await fetch('/tasks'); const ts = await t.json(); document.getElementById('tasks').innerHTML=''; ts.forEach(t=>{ const li=document.createElement('li'); li.textContent = t.id + ':'+t.title; document.getElementById('tasks').appendChild(li) })
+}
+document.getElementById('createp').onclick = async ()=>{ const name=document.getElementById('pname').value; await fetch('/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); load(); }
+document.getElementById('createt').onclick = async ()=>{ const project_id=document.getElementById('pt').value; const title=document.getElementById('tt').value; await fetch('/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project_id, title})}); load(); }
+load();
+</script>
+</body></html>
