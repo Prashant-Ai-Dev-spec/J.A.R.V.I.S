@@ -46,3 +46,12 @@
 {"ts": "2026-05-15T00:11:42.967991Z", "event": "dispatch.task_queued", "payload": {"id": "5089c086-b2d0-4b01-b7a2-52ae0be243bb", "func": "example_job"}}
 {"ts": "2026-05-15T00:11:42.999750Z", "event": "dispatch.task_running", "payload": {"id": "5089c086-b2d0-4b01-b7a2-52ae0be243bb", "worker": 1}}
 {"ts": "2026-05-15T00:11:43.119012Z", "event": "dispatch.task_done", "payload": {"id": "5089c086-b2d0-4b01-b7a2-52ae0be243bb", "result": {"slept": 0.1}}}
+{"ts": "2026-05-15T00:23:46.474339Z", "event": "dispatch.task_queued", "payload": {"id": "16ed871f-9f0c-4aab-a9a2-4f7d2f93665e", "func": "example_job"}}
+{"ts": "2026-05-15T00:23:46.560357Z", "event": "dispatch.task_running", "payload": {"id": "16ed871f-9f0c-4aab-a9a2-4f7d2f93665e", "worker": 2}}
+{"ts": "2026-05-15T00:23:47.586013Z", "event": "dispatch.task_done", "payload": {"id": "16ed871f-9f0c-4aab-a9a2-4f7d2f93665e", "result": {"slept": 1}}}
+{"ts": "2026-05-15T00:23:47.724086Z", "event": "dispatch.task_queued", "payload": {"id": "72791f4a-871e-46d8-a812-68dfe05a8332", "func": "example_job"}}
+{"ts": "2026-05-15T00:23:47.784758Z", "event": "dispatch.task_running", "payload": {"id": "72791f4a-871e-46d8-a812-68dfe05a8332", "worker": 3}}
+{"ts": "2026-05-15T00:23:47.910854Z", "event": "dispatch.task_done", "payload": {"id": "72791f4a-871e-46d8-a812-68dfe05a8332", "result": {"slept": 0.1}}}
+{"ts": "2026-05-15T00:23:47.957210Z", "event": "dispatch.task_queued", "payload": {"id": "0676601e-8fe9-4755-b87f-f8ccbbaee873", "func": "example_job"}}
+{"ts": "2026-05-15T00:23:48.001122Z", "event": "dispatch.task_running", "payload": {"id": "0676601e-8fe9-4755-b87f-f8ccbbaee873", "worker": 2}}
+{"ts": "2026-05-15T00:23:48.129694Z", "event": "dispatch.task_done", "payload": {"id": "0676601e-8fe9-4755-b87f-f8ccbbaee873", "result": {"slept": 0.1}}}
