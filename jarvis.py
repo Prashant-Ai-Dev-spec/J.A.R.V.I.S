@@ -3431,7 +3431,7 @@ class Intent:
     # Patterns for compound commands: "open X and search Y", "open X and go to Y"
     COMPOUND_OPEN_SEARCH = re.compile(
         r"^(?:open|launch|start|run)\s+(.+?)\s+(?:and|then)\s+"
-        r"(?:search|search for|google|look up|find|go to|browse|type|enter)\s+(.+)$",
+        r"(?:search for|search|google|look up|find|go to|browse|type|enter)\s+(.+)$",
         re.I,
     )
 
