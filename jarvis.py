@@ -1185,6 +1185,12 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
     except ImportError as e:
         tools = None
         print(f"[Tools Error] {e}")
+        if force_tools:
+            return (
+                f"Cowork mode is unavailable — the backend tools module failed to load: {e}. "
+                "Please ensure the 'backend' package exists with ai_tools.py and database.py, "
+                "and that pyautogui is installed (pip install pyautogui)."
+            )
 
     # Offline: local Ollama (OpenAI-compatible API). Skip for multimodal messages.
     if (
