@@ -110,6 +110,8 @@ Copy `jarvis_config.template.json` → rename to `jarvis_config.json` and fill i
 
 JARVIS is designed to be safe to share as source code, but each user must configure their own private runtime files before using it:
 
+- This repository should not contain working API keys, account tokens, email passwords, face images, browser sessions, or personal runtime data.
+- `jarvis_config.json` is a private local file. It is not meant to be committed. Create it yourself from `jarvis_config.template.json`.
 - Keep `jarvis_config.json` and `.env` local. They are ignored by Git because they can contain API keys, passwords, Telegram tokens, email app passwords, and personal settings.
 - Use `jarvis_config.template.json` and `.env.example` as examples only. Do not paste real secrets into template/example files.
 - Set a strong `web_api_token` or `JARVIS_WEB_TOKEN` before exposing the web/PWA bridge on your Wi-Fi or the internet. Weak defaults like `jarvis` or `1234` are rejected.
@@ -132,6 +134,23 @@ The public repository should contain no real API keys, passwords, Telegram bot t
 - `jarvis_photos/`
 - `uploads/`
 - `scripts/backend/certs/`
+
+#### Required Private Configuration
+
+Every user must provide their own values:
+
+| Setting | Required for | Where to get it |
+|---|---|---|
+| `groq_api_key` or another AI provider key | AI chat | Your own Groq/OpenRouter/etc. account |
+| `gemini_api_key` | Vision/image analysis | Your own Google AI Studio account |
+| `openweather_api_key` | Weather | Your own OpenWeather account |
+| `news_api_key` | News | Your own NewsAPI account |
+| `email` + `email_password` | Gmail read/send | Your Gmail address and Gmail app password |
+| `telegram_bot_token` | Telegram bot | Your own BotFather bot |
+| `telegram_allowed_user_id` | Owner-only Telegram access | Your own Telegram user ID |
+| `web_api_token` or `JARVIS_WEB_TOKEN` | Web/PWA and backend auth | Generate a long random token |
+
+Optional features can stay disabled until configured. JARVIS should still run in text/basic modes with only the dependencies and keys you choose to provide.
 
 #### Gmail App Password:
 1. myaccount.google.com → Security

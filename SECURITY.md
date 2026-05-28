@@ -9,6 +9,14 @@ Use `jarvis_config.template.json` and `.env.example` as examples only. Copy them
 to private local files (`jarvis_config.json` and `.env`) before adding real
 credentials.
 
+Current public repository policy:
+- `jarvis_config.json` must remain untracked and local-only.
+- `jarvis_mobile_settings.json` must remain untracked and local-only.
+- `.env`, generated certificates, OAuth token stores, logs, sessions, photos,
+  uploads, and owner face images must remain untracked.
+- If a credential ever appears in Git history, rotate it from the provider
+  dashboard instead of trusting a later deletion.
+
 Safe-by-default controls:
 - Weak web tokens such as `jarvis`, `1234`, `admin`, and short tokens are rejected.
 - Web auth does not accept hardcoded passcodes or loopback-only face bypasses.
