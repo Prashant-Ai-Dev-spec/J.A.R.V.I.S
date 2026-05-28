@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>JARVIS Mobile</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient">
+    <span class="glow glow-a"></span>
+    <span class="glow glow-b"></span>
+    <span class="mesh"></span>
+  </div>
+
+  <section id="splash" class="splash">
+    <video id="introVideo" class="intro-video" muted playsinline preload="auto">
+      <source src="assets/intro.mp4" type="video/mp4" />
+    </video>
+    <div class="intro-fallback" id="introFallback">
+      <div class="orb">
+        <i></i><i></i><i></i>
+      </div>
+      <div class="pulse-line"></div>
+    </div>
+    <div class="splash-copy">
+      <p class="eyebrow">Premium AI companion</p>
+      <h1>JARVIS Mobile</h1>
+      <p>Connect to your laptop brain and control everything from your phone.</p>
+    </div>
+    <button id="skipIntro" class="ghost-btn">Skip</button>
+  </section>
+
+  <main id="app" class="app hidden">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Connected assistant</p>
+        <h2>JARVIS</h2>
+      </div>
+      <button id="connectionPill" class="status-pill warn">Offline</button>
+    </header>
+
+    <section id="setupCard" class="glass setup-card">
+      <p class="eyebrow">First setup</p>
+      <h3>Connect your laptop</h3>
+      <p class="muted">Run JARVIS web on your PC, then enter the LAN URL and token here.</p>
+      <label>Server URL</label>
+      <input id="serverUrl" type="url" placeholder="http://10.194.207.173:8765" autocomplete="off" />
+      <label>API token</label>
+      <input id="apiToken" type="password" placeholder="JARVIS_WEB_TOKEN" autocomplete="off" />
+      <div class="row">
+        <button id="saveSettings" class="primary">Save</button>
+        <button id="testConnection" class="secondary">Test</button>
+      </div>
+      <p id="setupMessage" class="hint"></p>
+    </section>
+
+    <section id="home" class="screen active">
+      <div class="glass hero-card">
+        <p class="eyebrow">Natural command</p>
+        <h3>What should JARVIS do?</h3>
+        <div class="command-box">
+          <textarea id="commandInput" rows="3" placeholder="Example: light status, proactive status, system report"></textarea>
+          <button id="micBtn" class="round-btn" aria-label="Speak command">Mic</button>
+        </div>
+        <button id="sendCommand" class="primary wide">Send to JARVIS</button>
+      </div>
+
+      <div id="callCard" class="glass call-card hidden">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">WhatsApp call</p>
+            <h3 id="callTitle">Incoming call</h3>
+            <p id="callMeta" class="muted small">Waiting for caller...</p>
+          </div>
+          <span id="callType" class="call-chip">Voice</span>
+        </div>
+        <textarea id="callReplyText" rows="2" placeholder="Custom reply message"></textarea>
+        <div class="call-actions">
+          <button id="ignoreCall" class="secondary">Ignore</button>
+          <button id="declineCall" class="danger">Decline</button>
+          <button id="busyCall" class="gold-btn">Busy reply</button>
+          <button id="replyCall" class="primary">Send reply</button>
+        </div>
+        <p id="callMessage" class="hint"></p>
+      </div>
+
+      <div class="glass chat-card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Live reply</p>
+            <h3>Conversation</h3>
+          </div>
+          <button id="clearChat" class="mini">Clear</button>
+        </div>
+        <div id="chatLog" class="chat-log"></div>
+      </div>
+    </section>
+
+    <section id="dashboard" class="screen">
+      <div class="metric-grid">
+        <article class="glass metric-card">
+          <span>CPU</span>
+          <strong id="cpuText">--%</strong>
+          <div class="bar"><i id="cpuBar"></i></div>
+        </article>
+        <article class="glass metric-card">
+          <span>RAM</span>
+          <strong id="ramText">--</strong>
+          <div class="bar"><i id="ramBar"></i></div>
+        </article>
+        <article class="glass metric-card gold">
+          <span>Disk</span>
+          <strong id="diskText">--</strong>
+          <div class="bar"><i id="diskBar"></i></div>
+        </article>
+        <article class="glass metric-card green">
+          <span>Network</span>
+          <strong id="netText">--</strong>
+          <p id="batteryText" class="muted small">Battery --</p>
+        </article>
+      </div>
+      <div class="glass">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Running now</p>
+            <h3>Top processes</h3>
+          </div>
+          <button id="refreshStats" class="mini">Refresh</button>
+        </div>
+        <div id="processList" class="process-list"></div>
+      </div>
+    </section>
+
+    <section id="actions" class="screen">
+      <div class="quick-grid">
+        <button class="glass action" data-command="light status">Light status</button>
+        <button class="glass action" data-command="light on">Light on</button>
+        <button class="glass action" data-command="light off">Light off</button>
+        <button class="glass action" data-command="proactive status">Proactive</button>
+        <button class="glass action" data-command="system status">System</button>
+        <button class="glass action" data-command="take screenshot">Screenshot</button>
+        <button class="glass action" data-command="read notes">Read notes</button>
+        <button class="glass action" id="whatsappStatus">WhatsApp status</button>
+        <button class="glass action phone-action" data-mobile-command="instagram open karo">Open Instagram</button>
+        <button class="glass action phone-action" data-mobile-command="youtube kholo">Open YouTube</button>
+        <button class="glass action phone-action" data-mobile-command="whatsapp kholo">Open WhatsApp</button>
+        <button class="glass action phone-action" data-mobile-command="notifications open karo">Notifications</button>
+        <button class="glass action phone-action" data-mobile-command="home">Phone home</button>
+        <button class="glass action phone-action" data-mobile-command="back">Phone back</button>
+      </div>
+    </section>
+
+    <section id="camera" class="screen">
+      <div class="glass camera-card">
+        <p class="eyebrow">Phone camera</p>
+        <h3>Analyze an image</h3>
+        <p class="muted">Capture or choose a photo. JARVIS will process it on the PC server.</p>
+        <input id="imagePicker" type="file" accept="image/*" capture="environment" />
+        <img id="preview" class="preview hidden" alt="Selected image preview" />
+        <button id="analyzeImage" class="primary wide">Analyze image</button>
+        <pre id="cameraResult" class="result-box"></pre>
+      </div>
+    </section>
+
+    <section id="settings" class="screen">
+      <div class="glass">
+        <p class="eyebrow">Connection</p>
+        <h3>Mobile settings</h3>
+        <label>Server URL</label>
+        <input id="settingsServerUrl" type="url" placeholder="http://PC-LAN-IP:8765" />
+        <label>API token</label>
+        <input id="settingsApiToken" type="password" placeholder="token" />
+        <button id="saveSettings2" class="primary wide">Save settings</button>
+        <div class="tips">
+          <p>PC command:</p>
+          <code>python jarvis_web.py --host 0.0.0.0 --port 8765</code>
+        </div>
+      </div>
+
+      <div class="glass">
+        <p class="eyebrow">Phone calls</p>
+        <h3>Normal call secretary</h3>
+        <p class="muted">When enabled, Android can reject normal phone calls and send an SMS reply from this phone.</p>
+        <label>SMS reply</label>
+        <textarea id="normalCallReply" rows="3">Prashant abhi busy hai. Aapko unse kya kaam hai, mujhe message me bata sakte hain.</textarea>
+        <div class="row">
+          <button id="setupNormalCall" class="primary">Setup</button>
+          <button id="refreshNormalCall" class="secondary">Status</button>
+        </div>
+        <div class="row">
+          <button id="enableNormalCall" class="gold-btn">Enable</button>
+          <button id="disableNormalCall" class="danger">Disable</button>
+        </div>
+        <pre id="normalCallStatus" class="result-box small"></pre>
+      </div>
+
+      <div class="glass">
+        <p class="eyebrow">Phone control</p>
+        <h3>Android app control</h3>
+        <p class="muted">Open installed apps directly. Enable Accessibility only if you want JARVIS to tap, type, scroll, back, home, and click screen text.</p>
+        <div class="row">
+          <button id="setupPhoneControl" class="primary">Setup</button>
+          <button id="refreshPhoneControl" class="secondary">Status</button>
+        </div>
+        <pre id="phoneControlStatus" class="result-box small"></pre>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav hidden" id="bottomNav">
+    <button data-tab="home" class="active">Home</button>
+    <button data-tab="dashboard">Stats</button>
+    <button data-tab="actions">Actions</button>
+    <button data-tab="camera">Camera</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

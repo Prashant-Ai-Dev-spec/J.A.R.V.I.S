@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Allows JARVIS Mobile to control this phone when you explicitly enable phone control commands.</string>
+
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:navigationBarColor">#070812</item>
+        <item name="android:statusBarColor">#070812</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

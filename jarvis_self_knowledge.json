@@ -1,0 +1,2003 @@
+{
+  "generated_at": "2026-05-28T16:40:22",
+  "project_root": "C:\\Users\\PRASHANT\\OneDrive\\Desktop\\J.A.R.V.I.S",
+  "summary": "I am JARVIS, a Python-based personal assistant project built for Prashant.\nMy main runtime is jarvis.py, with reusable helpers under jarvis_modules and tests under backend/tests.\nI am made from voice input/output, AI chat and vision, Windows system control, camera, email, weather, news, notes, calendar, browser/automation, WhatsApp, Telegram, contacts, owner-face recognition, proactive prompts, and web/backend bridge pieces.\nThis self-index saw 197 files and recorded 192 safe entries while skipping secrets, sessions, caches, virtual environments, binaries, and large assets.\nKey classes I found include: ActivityEvent, AudioAnalyzer, AudioMeter, BrowserMatchingTests, BrowsingAdapter, DiskAuditTests, ElevenLabsConfigTests, ElevenLabsTTSError, ExampleEnum, HudCard, JARVISGui, JarvisOrb, JarvisSecretary, JarvisWebHandler, LineChart, MetricBar, NotificationEvent, PersonalTelegramSecretary, PlaywrightAdapter, ProactiveEngine, RelayControl, ScrollColumn, SelfImprovementTests, SelfKnowledgeTests, ToastManager, VisionMode, WebBridgeCoreTests, WhatsAppBridge.\nImportant code files include: debug_sql.py, gemini-code-1778927298024.py, jarvis_gui.py, jarvis_gui_perf.py, jarvis_personal_telegram.py, jarvis_secretary.py, jarvis_telegram.py, jarvis_web.py, jarvis_whatsapp_bridge.py, playwright_check.py, playwright_test.py, proactive_engine.py, run_jarvis_bot.py, scratch_fetch.py, test_playwright.py, backend/__init__.py, backend/admin.py, backend/admin_endpoints.py, backend/agentic.py, backend/ai_tools.py, backend/browsing_adapter.py, backend/database.py, backend/main.py, backend/playwright_adapter.py, backend/security.py.",
+  "directories": [
+    "assets",
+    "backend",
+    "backend/certs",
+    "backend/connectors",
+    "backend/cowork",
+    "backend/desktop_automation",
+    "backend/dispatch",
+    "backend/integrations",
+    "backend/mcp",
+    "backend/plugins",
+    "backend/static",
+    "backend/tests",
+    "backend/tests/resources",
+    "docs",
+    "jarvis-whatsapp",
+    "jarvis-whatsapp/.wwebjs_cache",
+    "jarvis_modules",
+    "mobile",
+    "mobile/android",
+    "mobile/android/.gradle",
+    "mobile/android/.gradle/9.0.0",
+    "mobile/android/.gradle/9.0.0/checksums",
+    "mobile/android/.gradle/9.0.0/executionHistory",
+    "mobile/android/.gradle/9.0.0/expanded",
+    "mobile/android/.gradle/9.0.0/fileChanges",
+    "mobile/android/.gradle/9.0.0/fileHashes",
+    "mobile/android/.gradle/9.0.0/vcsMetadata",
+    "mobile/android/.gradle/buildOutputCleanup",
+    "mobile/android/.gradle/vcs-1",
+    "mobile/android/.idea",
+    "mobile/android/.idea/caches",
+    "mobile/android/app",
+    "mobile/android/app/src",
+    "mobile/android/app/src/main",
+    "mobile/android/app/src/main/assets",
+    "mobile/android/app/src/main/assets/mobile",
+    "mobile/android/app/src/main/assets/mobile/assets",
+    "mobile/android/app/src/main/java",
+    "mobile/android/app/src/main/java/com",
+    "mobile/android/app/src/main/java/com/prashant",
+    "mobile/android/app/src/main/java/com/prashant/jarvismobile",
+    "mobile/android/app/src/main/res",
+    "mobile/android/app/src/main/res/drawable",
+    "mobile/android/app/src/main/res/values",
+    "mobile/android/app/src/main/res/xml",
+    "mobile/android/bin",
+    "mobile/android/gradle",
+    "mobile/android/gradle/wrapper",
+    "scripts",
+    "scripts/backend",
+    "scripts/backend/certs",
+    "testing",
+    "testing/patches",
+    "web",
+    "web/assets",
+    "web/assets/orbs",
+    "web/previews",
+    "yjs_server"
+  ],
+  "important_docs": [
+    "ADMIN_API.md",
+    "COTURN.md",
+    "DEEP_ANALYSIS.md",
+    "DEPLOY.md",
+    "JARVIS_Advanced_UI_Roadmap.txt",
+    "NEXT_STEPS.md",
+    "OAUTH_SETUP.md",
+    "PRODUCTION_CERTIFICATE.txt",
+    "PR_DRAFT.md",
+    "PyWhatKit_DB.txt",
+    "README.md",
+    "README_DEPLOYMENT.md",
+    "SECURITY.md",
+    "TERRAFORM.md",
+    "WEBRTC_SETUP.md",
+    "implementation_plan.md",
+    "requirements-automation.txt",
+    "requirements.txt",
+    "backend/README_INTEGRATIONS.md",
+    "backend/README_SECURITY.md",
+    "backend/integrations/README.md",
+    "backend/tests/e2e_notepad_test.txt",
+    "mobile/README.md",
+    "mobile/android/README.md",
+    "mobile/android/app/src/main/assets/mobile/assets/README.md"
+  ],
+  "entries": [
+    {
+      "path": ".dockerignore",
+      "size_bytes": 268,
+      "modified": "2026-05-19T21:11:35",
+      "type": "non_text"
+    },
+    {
+      "path": ".env.example",
+      "size_bytes": 421,
+      "modified": "2026-05-22T15:18:37",
+      "type": "non_text"
+    },
+    {
+      "path": ".gitattributes",
+      "size_bytes": 68,
+      "modified": "2026-05-16T13:13:51",
+      "type": "non_text"
+    },
+    {
+      "path": ".gitignore",
+      "size_bytes": 670,
+      "modified": "2026-05-15T17:52:17",
+      "type": "non_text"
+    },
+    {
+      "path": "ADMIN_API.md",
+      "size_bytes": 8035,
+      "modified": "2026-05-20T05:57:18",
+      "line_count": 403,
+      "type": "md",
+      "purpose": "ADMIN API DOCUMENTATION"
+    },
+    {
+      "path": "COTURN.md",
+      "size_bytes": 4244,
+      "modified": "2026-05-20T05:56:45",
+      "line_count": 165,
+      "type": "md",
+      "purpose": "coturn TURN Server Configuration"
+    },
+    {
+      "path": "DEEP_ANALYSIS.md",
+      "size_bytes": 29111,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 1052,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S - Deep Code Analysis Report"
+    },
+    {
+      "path": "DEPLOY.md",
+      "size_bytes": 1082,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 20,
+      "type": "md",
+      "purpose": "JARVIS Deployment Quickstart"
+    },
+    {
+      "path": "Dockerfile",
+      "size_bytes": 581,
+      "modified": "2026-05-20T05:11:18",
+      "line_count": 10,
+      "type": "dockerfile",
+      "purpose": "FROM python:3.10-slim"
+    },
+    {
+      "path": "Futuristic HUD-Style UI for JARVIS.pdf",
+      "size_bytes": 96404,
+      "modified": "2026-05-20T10:53:11",
+      "type": "non_text"
+    },
+    {
+      "path": "JARVIS_Advanced_UI_Roadmap.txt",
+      "size_bytes": 6033,
+      "modified": "2026-05-21T04:28:24",
+      "line_count": 301,
+      "type": "txt",
+      "purpose": "J.A.R.V.I.S. AI SYSTEM — ADVANCED UI & IMMERSION ROADMAP"
+    },
+    {
+      "path": "NEXT_STEPS.md",
+      "size_bytes": 7511,
+      "modified": "2026-05-20T05:57:41",
+      "line_count": 377,
+      "type": "md",
+      "purpose": "NEXT STEPS - J.A.R.V.I.S PRODUCTION DEPLOYMENT"
+    },
+    {
+      "path": "OAUTH_SETUP.md",
+      "size_bytes": 7064,
+      "modified": "2026-05-13T18:46:25",
+      "line_count": 228,
+      "type": "md",
+      "purpose": "OAuth Configuration Guide"
+    },
+    {
+      "path": "PRODUCTION_CERTIFICATE.txt",
+      "size_bytes": 11494,
+      "modified": "2026-05-20T07:10:49",
+      "line_count": 243,
+      "type": "txt",
+      "purpose": "╔══════════════════════════════════════════════════════════════════════════════╗"
+    },
+    {
+      "path": "PR_DRAFT.md",
+      "size_bytes": 1786,
+      "modified": "2026-05-15T06:38:26",
+      "line_count": 38,
+      "type": "md",
+      "purpose": "Title: dispatch: sqlite durable queue & improvements"
+    },
+    {
+      "path": "PyWhatKit_DB.txt",
+      "size_bytes": 112,
+      "modified": "2026-05-23T18:47:17",
+      "line_count": 6,
+      "type": "txt",
+      "purpose": "Date: 23/5/2026"
+    },
+    {
+      "path": "README.md",
+      "size_bytes": 11131,
+      "modified": "2026-05-12T20:26:04",
+      "line_count": 367,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S — Personal AI Assistant"
+    },
+    {
+      "path": "README_DEPLOYMENT.md",
+      "size_bytes": 9156,
+      "modified": "2026-05-20T05:58:33",
+      "line_count": 385,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S DOCUMENTATION INDEX"
+    },
+    {
+      "path": "SECURITY.md",
+      "size_bytes": 932,
+      "modified": "2026-05-20T05:44:34",
+      "line_count": 29,
+      "type": "md",
+      "purpose": "Production Hardening Checklist"
+    },
+    {
+      "path": "TERRAFORM.md",
+      "size_bytes": 5270,
+      "modified": "2026-05-20T05:56:29",
+      "line_count": 247,
+      "type": "md",
+      "purpose": "TERRAFORM & INFRASTRUCTURE AS CODE"
+    },
+    {
+      "path": "WEBRTC_SETUP.md",
+      "size_bytes": 7728,
+      "modified": "2026-05-13T18:46:45",
+      "line_count": 305,
+      "type": "md",
+      "purpose": "WebRTC TURN Server & HTTPS Setup Guide"
+    },
+    {
+      "path": "contacts.csv",
+      "size_bytes": 2652,
+      "modified": "2026-04-27T20:21:29",
+      "line_count": 35,
+      "type": "csv",
+      "purpose": "First Name,Middle Name,Last Name,Phonetic First Name,Phonetic Middle Name,Phonetic Last Name,Name Prefix,Name Suffix,Nickname,File As,Organization Name,Organization Title,Organization Department,Birthday,Notes,Photo,Labels,E-mail 1 - Label,"
+    },
+    {
+      "path": "debug_sql.py",
+      "size_bytes": 192,
+      "modified": "2026-05-15T06:34:12",
+      "line_count": 4,
+      "type": "python"
+    },
+    {
+      "path": "docker-compose.prod.yml",
+      "size_bytes": 1333,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 59,
+      "type": "yml",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "docker-compose.yml",
+      "size_bytes": 1412,
+      "modified": "2026-05-20T06:22:05",
+      "line_count": 66,
+      "type": "yml",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "gemini-code-1778927298024.py",
+      "size_bytes": 374,
+      "modified": "2026-05-16T15:58:20",
+      "line_count": 9,
+      "type": "python",
+      "imports": [
+        "agents"
+      ]
+    },
+    {
+      "path": "implementation_plan.md",
+      "size_bytes": 5084,
+      "modified": "2026-05-20T16:52:41",
+      "line_count": 83,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S Next-Generation Web HUD GUI"
+    },
+    {
+      "path": "jarvis.py",
+      "size_bytes": 330375,
+      "modified": "2026-05-28T16:35:25",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis_config.template.json",
+      "size_bytes": 3951,
+      "modified": "2026-05-25T20:53:01",
+      "line_count": 111,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_events.json",
+      "size_bytes": 137,
+      "modified": "2026-05-23T19:13:36",
+      "line_count": 7,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_gui.py",
+      "size_bytes": 240262,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 5634,
+      "type": "python",
+      "purpose": "J.A.R.V.I.S GUI v3.0 Modern HUD-style desktop interface for the existing JARVIS backend. Features: - real-time embedded camera feed - capture live frame and use it as an AI reference image - attach files and folders as context for AI chat -",
+      "classes": [
+        "VisionMode",
+        "ActivityEvent",
+        "ToastManager",
+        "AudioMeter",
+        "AudioAnalyzer",
+        "LineChart",
+        "HudCard",
+        "MetricBar",
+        "ScrollColumn",
+        "JarvisOrb",
+        "JARVISGui"
+      ],
+      "functions": [
+        "apply_button_style",
+        "enhance_hud_button",
+        "human_size",
+        "short_path",
+        "main"
+      ],
+      "imports": [
+        "__future__",
+        "calendar",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "json",
+        "math",
+        "pathlib",
+        "platform",
+        "random",
+        "re",
+        "socket",
+        "subprocess",
+        "threading",
+        "time",
+        "tkinter"
+      ]
+    },
+    {
+      "path": "jarvis_gui.spec",
+      "size_bytes": 925,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 44,
+      "type": "spec",
+      "purpose": "# -*- mode: python ; coding: utf-8 -*-"
+    },
+    {
+      "path": "jarvis_gui_build.spec",
+      "size_bytes": 3993,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 175,
+      "type": "spec",
+      "purpose": "# -*- mode: python ; coding: utf-8 -*-"
+    },
+    {
+      "path": "jarvis_gui_perf.py",
+      "size_bytes": 193665,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 4555,
+      "type": "python",
+      "purpose": "J.A.R.V.I.S GUI v3.0 Modern HUD-style desktop interface for the existing JARVIS backend. Features: - real-time embedded camera feed - capture live frame and use it as an AI reference image - attach files and folders as context for AI chat -",
+      "classes": [
+        "VisionMode",
+        "ActivityEvent",
+        "ToastManager",
+        "AudioMeter",
+        "AudioAnalyzer",
+        "LineChart",
+        "HudCard",
+        "MetricBar",
+        "ScrollColumn",
+        "JarvisOrb",
+        "JARVISGui"
+      ],
+      "functions": [
+        "apply_button_style",
+        "enhance_hud_button",
+        "human_size",
+        "short_path",
+        "main"
+      ],
+      "imports": [
+        "__future__",
+        "calendar",
+        "collections",
+        "dataclasses",
+        "datetime",
+        "json",
+        "math",
+        "pathlib",
+        "platform",
+        "random",
+        "re",
+        "socket",
+        "subprocess",
+        "threading",
+        "time",
+        "tkinter"
+      ]
+    },
+    {
+      "path": "jarvis_lockscreen_refresh.png",
+      "size_bytes": 74194,
+      "modified": "2026-05-22T16:28:31",
+      "type": "non_text"
+    },
+    {
+      "path": "jarvis_mobile_settings.json",
+      "size_bytes": 69,
+      "modified": "2026-05-14T05:56:51",
+      "line_count": 1,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_notes.json",
+      "size_bytes": 2,
+      "modified": "2026-05-26T21:46:33",
+      "line_count": 1,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_personal_telegram.py",
+      "size_bytes": 12458,
+      "modified": "2026-05-28T16:25:14",
+      "line_count": 319,
+      "type": "python",
+      "purpose": "Personal Telegram secretary for J.A.R.V.I.S. This listens to the owner's Telegram account through Telegram's client API (Telethon), not the Bot API. It can therefore react to incoming personal DMs after the owner completes a one-time login.",
+      "classes": [
+        "PersonalTelegramSecretary"
+      ],
+      "functions": [
+        "start_background",
+        "stop_background",
+        "login"
+      ],
+      "imports": [
+        "__future__",
+        "asyncio",
+        "json",
+        "logging",
+        "os",
+        "pathlib",
+        "re",
+        "subprocess",
+        "threading",
+        "time",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_secretary.py",
+      "size_bytes": 29391,
+      "modified": "2026-05-24T17:59:42",
+      "line_count": 710,
+      "type": "python",
+      "purpose": "Background Windows notification secretary for J.A.R.V.I.S. Import this module from jarvis.py and call: from jarvis_secretary import JarvisSecretary secretary = JarvisSecretary(jarvis_instance=self) secretary.start_background() The class del",
+      "classes": [
+        "NotificationEvent",
+        "JarvisSecretary"
+      ],
+      "functions": [
+        "start_background",
+        "stop_background"
+      ],
+      "imports": [
+        "__future__",
+        "asyncio",
+        "dataclasses",
+        "json",
+        "logging",
+        "pathlib",
+        "re",
+        "subprocess",
+        "threading",
+        "time",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_self_knowledge.json",
+      "size_bytes": 57703,
+      "modified": "2026-05-28T16:21:35",
+      "line_count": 2010,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_skipintro_verification.png",
+      "size_bytes": 102058,
+      "modified": "2026-05-22T14:48:45",
+      "type": "non_text"
+    },
+    {
+      "path": "jarvis_tasks.json",
+      "size_bytes": 2,
+      "modified": "2026-05-22T14:03:58",
+      "line_count": 1,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis_telegram.py",
+      "size_bytes": 13336,
+      "modified": "2026-05-28T16:25:09",
+      "line_count": 371,
+      "type": "python",
+      "purpose": "Telegram secretary bot for J.A.R.V.I.S. This module is safe to import from jarvis.py. Call start_background() to run the bot in a daemon thread.",
+      "functions": [
+        "_load_config",
+        "_read_settings",
+        "_non_owner_ai_reply_enabled",
+        "is_auto_reply_enabled",
+        "set_auto_reply_enabled",
+        "_sender_label",
+        "_message_text",
+        "_chat_label",
+        "_safe_reply_text",
+        "_make_groq_reply",
+        "_make_owner_reply",
+        "_forward_to_owner",
+        "_handle_online",
+        "_handle_offline",
+        "_handle_status",
+        "_handle_start",
+        "_handle_ping",
+        "_handle_message",
+        "_run_bot",
+        "_thread_main",
+        "start_background",
+        "stop_background"
+      ],
+      "imports": [
+        "__future__",
+        "asyncio",
+        "json",
+        "logging",
+        "pathlib",
+        "threading",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_web.py",
+      "size_bytes": 78240,
+      "modified": "2026-05-28T16:24:10",
+      "line_count": 1800,
+      "type": "python",
+      "purpose": "J.A.R.V.I.S web/PWA bridge. Run: python jarvis_web.py --host 127.0.0.1 --port 8765 For phone access on the same Wi-Fi: set JARVIS_WEB_TOKEN=choose-a-long-token python jarvis_web.py --host 0.0.0.0 --port 8765",
+      "classes": [
+        "JarvisWebHandler"
+      ],
+      "functions": [
+        "_make_json_safe",
+        "_json_bytes",
+        "_local_ips",
+        "_wake_windows_display",
+        "_open_jarvis_web_surface",
+        "_process_esp_button_event",
+        "_esp_button_status",
+        "_queue_esp_button_event",
+        "_has_secret",
+        "_configured_token",
+        "_token_is_strong",
+        "_secure_token_equal",
+        "_is_loopback",
+        "_origin_allowed",
+        "_get_jarvis",
+        "_looks_interactive",
+        "_looks_like_action_json",
+        "_run_command",
+        "_load_tasks",
+        "_save_tasks",
+        "_round_gb",
+        "_read_cpu_temp",
+        "_compute_gpu_stats",
+        "_refresh_gpu_stats",
+        "_read_gpu_stats",
+        "_network_mbps",
+        "_compute_top_processes",
+        "_refresh_top_processes",
+        "_top_processes",
+        "_compute_process_list"
+      ],
+      "imports": [
+        "__future__",
+        "argparse",
+        "asyncio",
+        "datetime",
+        "enum",
+        "hmac",
+        "http",
+        "jarvis",
+        "jarvis_whatsapp_bridge",
+        "json",
+        "mimetypes",
+        "os",
+        "pathlib",
+        "platform",
+        "queue",
+        "socket",
+        "subprocess",
+        "tempfile",
+        "threading",
+        "time",
+        "urllib"
+      ]
+    },
+    {
+      "path": "jarvis_web.spec",
+      "size_bytes": 1578,
+      "modified": "2026-05-12T19:44:22",
+      "line_count": 77,
+      "type": "spec",
+      "purpose": "# -*- mode: python ; coding: utf-8 -*-"
+    },
+    {
+      "path": "jarvis_web_bg.err.log",
+      "size_bytes": 6399,
+      "modified": "2026-05-28T15:18:54",
+      "type": "non_text"
+    },
+    {
+      "path": "jarvis_web_bg.out.log",
+      "size_bytes": 24533,
+      "modified": "2026-05-28T15:31:28",
+      "type": "non_text"
+    },
+    {
+      "path": "jarvis_whatsapp_bridge.py",
+      "size_bytes": 24939,
+      "modified": "2026-05-26T21:17:55",
+      "line_count": 643,
+      "type": "python",
+      "purpose": "Local WhatsApp Web bridge coordinator for J.A.R.V.I.S. The Node side owns WhatsApp Web. This Python side owns JARVIS voice prompts, cooldowns, and the conservative ask-before-send policy.",
+      "classes": [
+        "WhatsAppBridge"
+      ],
+      "functions": [
+        "_load_config",
+        "_post_json",
+        "_get_json",
+        "get_bridge"
+      ],
+      "imports": [
+        "__future__",
+        "json",
+        "os",
+        "pathlib",
+        "queue",
+        "subprocess",
+        "threading",
+        "time",
+        "typing",
+        "urllib"
+      ]
+    },
+    {
+      "path": "playwright_check.py",
+      "size_bytes": 640,
+      "modified": "2026-05-22T14:09:33",
+      "line_count": 21,
+      "type": "python",
+      "imports": [
+        "sys"
+      ]
+    },
+    {
+      "path": "playwright_test.py",
+      "size_bytes": 1257,
+      "modified": "2026-05-22T14:09:13",
+      "line_count": 36,
+      "type": "python",
+      "imports": [
+        "sys"
+      ]
+    },
+    {
+      "path": "proactive_engine.py",
+      "size_bytes": 14960,
+      "modified": "2026-05-25T18:59:49",
+      "line_count": 333,
+      "type": "python",
+      "purpose": "╔══════════════════════════════════════════════════════════════╗ ║ J.A.R.V.I.S — ProactiveEngine ║ ║ JARVIS ab khud bolega — bina bulaye! 🤖 ║ ║ File: jarvis_modules/proactive_engine.py ║ ╚════════════════════════════════════════════════════",
+      "classes": [
+        "ProactiveEngine"
+      ],
+      "imports": [
+        "datetime",
+        "platform",
+        "random",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "path": "requirements-automation.txt",
+      "size_bytes": 385,
+      "modified": "2026-05-15T07:16:54",
+      "line_count": 16,
+      "type": "txt",
+      "purpose": "Optional automation/E2E dependencies for Jarvis Cowork validation."
+    },
+    {
+      "path": "requirements.txt",
+      "size_bytes": 1477,
+      "modified": "2026-05-24T16:37:27",
+      "line_count": 78,
+      "type": "txt",
+      "purpose": "J.A.R.V.I.S v2.0 — Requirements"
+    },
+    {
+      "path": "run_jarvis_bot.py",
+      "size_bytes": 368,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 16,
+      "type": "python",
+      "imports": [
+        "jarvis"
+      ]
+    },
+    {
+      "path": "scratch_fetch.py",
+      "size_bytes": 1152,
+      "modified": "2026-05-20T16:30:28",
+      "line_count": 29,
+      "type": "python",
+      "imports": [
+        "re",
+        "urllib"
+      ]
+    },
+    {
+      "path": "setup_windows.bat",
+      "size_bytes": 1334,
+      "modified": "2026-04-29T07:46:06",
+      "line_count": 45,
+      "type": "bat",
+      "purpose": "@echo off"
+    },
+    {
+      "path": "start_jarvis_web_bg.ps1",
+      "size_bytes": 645,
+      "modified": "2026-05-27T09:33:10",
+      "line_count": 24,
+      "type": "ps1",
+      "purpose": "$ErrorActionPreference = \"SilentlyContinue\""
+    },
+    {
+      "path": "task.json",
+      "size_bytes": 46,
+      "modified": "2026-05-20T04:59:10",
+      "line_count": 5,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "task2.json",
+      "size_bytes": 57,
+      "modified": "2026-05-20T04:59:52",
+      "line_count": 5,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "test_playwright.py",
+      "size_bytes": 1257,
+      "modified": "2026-05-22T14:08:48",
+      "line_count": 36,
+      "type": "python",
+      "imports": [
+        "sys"
+      ]
+    },
+    {
+      "path": "assets/Screenshot 2026-05-20 200635.png",
+      "size_bytes": 3606646,
+      "modified": "2026-05-20T20:06:40",
+      "type": "non_text"
+    },
+    {
+      "path": "backend/README_INTEGRATIONS.md",
+      "size_bytes": 355,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 8,
+      "type": "md",
+      "purpose": "Integrations Setup"
+    },
+    {
+      "path": "backend/README_SECURITY.md",
+      "size_bytes": 449,
+      "modified": "2026-05-20T05:44:34",
+      "line_count": 10,
+      "type": "md",
+      "purpose": "Security README"
+    },
+    {
+      "path": "backend/__init__.py",
+      "size_bytes": 53,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 2,
+      "type": "python"
+    },
+    {
+      "path": "backend/admin.py",
+      "size_bytes": 6830,
+      "modified": "2026-05-20T07:07:27",
+      "line_count": 189,
+      "type": "python",
+      "purpose": "Admin API endpoints - protected by X-Admin-Key header",
+      "functions": [
+        "verify_admin_key",
+        "admin_health",
+        "get_recent_audit",
+        "rotate_audit",
+        "get_task_stats",
+        "cleanup_tasks",
+        "get_config"
+      ],
+      "imports": [
+        "datetime",
+        "fastapi",
+        "json",
+        "os",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/admin_endpoints.py",
+      "size_bytes": 3451,
+      "modified": "2026-05-20T05:44:34",
+      "line_count": 97,
+      "type": "python",
+      "functions": [
+        "admin_list_approvals",
+        "admin_approve",
+        "admin_deny",
+        "admin_kill",
+        "admin_audit",
+        "admin_create_task"
+      ],
+      "imports": [
+        "backend",
+        "fastapi",
+        "json",
+        "os",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/agent_approvals.json",
+      "size_bytes": 242,
+      "modified": "2026-05-20T07:10:09",
+      "line_count": 7,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "backend/agent_kill_switch.json",
+      "size_bytes": 41,
+      "modified": "2026-05-20T07:10:10",
+      "line_count": 1,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "backend/agent_tasks.json",
+      "size_bytes": 1384,
+      "modified": "2026-05-20T07:10:11",
+      "line_count": 61,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "backend/agentic.py",
+      "size_bytes": 2289,
+      "modified": "2026-05-19T20:52:19",
+      "line_count": 74,
+      "type": "python",
+      "functions": [
+        "_load_tasks",
+        "_save_tasks",
+        "_load_approvals",
+        "_save_approvals",
+        "_execute_task",
+        "runner_loop",
+        "start_background_runner"
+      ],
+      "imports": [
+        "json",
+        "os",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/ai_tools.py",
+      "size_bytes": 9460,
+      "modified": "2026-05-19T19:27:48",
+      "line_count": 243,
+      "type": "python",
+      "purpose": "AI Tools for J.A.R.V.I.S Cowork Mode. Provides the TOOLS_SCHEMA (OpenAI function-calling format) and execute_tool() so the AI brain can perform physical desktop actions via pyautogui.",
+      "functions": [
+        "execute_tool",
+        "_execute_computer_use",
+        "_take_screenshot"
+      ],
+      "imports": [
+        "base64",
+        "io",
+        "json",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/browsing_adapter.py",
+      "size_bytes": 1404,
+      "modified": "2026-05-19T20:52:19",
+      "line_count": 35,
+      "type": "python",
+      "purpose": "Browsing adapter: supports 'requests' and 'playwright' providers. Playwright provider requires playwright package and browsers installed.",
+      "classes": [
+        "BrowsingAdapter"
+      ],
+      "imports": [
+        "requests",
+        "typing"
+      ]
+    },
+    {
+      "path": "backend/ci_deploy.sh",
+      "size_bytes": 254,
+      "modified": "2026-05-20T05:44:34",
+      "type": "non_text"
+    },
+    {
+      "path": "backend/database.py",
+      "size_bytes": 1018,
+      "modified": "2026-05-16T13:13:51",
+      "line_count": 31,
+      "type": "python",
+      "purpose": "Minimal database module for J.A.R.V.I.S Cowork. Provides a SessionLocal factory used by execute_tool(). The computer_use tool doesn't need a real DB session, but the _create_completion call signature passes one in, so we provide a lightweig"
+    },
+    {
+      "path": "backend/main.py",
+      "size_bytes": 9621,
+      "modified": "2026-05-28T16:30:07",
+      "line_count": 268,
+      "type": "python",
+      "functions": [
+        "_load_config_token",
+        "_backend_token",
+        "_token_is_strong",
+        "_token_matches",
+        "require_backend_auth",
+        "_require_ws_auth",
+        "_load_tokens",
+        "_save_tokens",
+        "root",
+        "install",
+        "oauth_callback",
+        "create_task",
+        "list_tasks",
+        "_load_approvals",
+        "_save_approvals",
+        "list_approvals",
+        "approve_task",
+        "deny_task",
+        "ws_meet",
+        "ws_chat",
+        "meeting_page",
+        "set_kill",
+        "agent_status",
+        "get_audit"
+      ],
+      "imports": [
+        "fastapi",
+        "hmac",
+        "json",
+        "os",
+        "threading",
+        "time",
+        "uuid"
+      ]
+    },
+    {
+      "path": "backend/playwright_adapter.py",
+      "size_bytes": 1021,
+      "modified": "2026-05-19T20:52:19",
+      "line_count": 28,
+      "type": "python",
+      "classes": [
+        "PlaywrightAdapter"
+      ],
+      "imports": [
+        "pathlib",
+        "playwright",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/security.py",
+      "size_bytes": 1893,
+      "modified": "2026-05-20T05:44:34",
+      "line_count": 65,
+      "type": "python",
+      "functions": [
+        "_now",
+        "rate_limit",
+        "get_admin_key",
+        "check_admin",
+        "require_admin"
+      ],
+      "imports": [
+        "fastapi",
+        "os",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "path": "backend/dispatch/dispatch.db",
+      "size_bytes": 45056,
+      "modified": "2026-05-15T17:10:34",
+      "type": "non_text"
+    },
+    {
+      "path": "backend/dispatch/tasks.json",
+      "size_bytes": 21923,
+      "modified": "2026-05-15T17:10:20",
+      "line_count": 1107,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "backend/integrations/README.md",
+      "size_bytes": 251,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 6,
+      "type": "md",
+      "purpose": "Integration helpers README"
+    },
+    {
+      "path": "backend/integrations/__init__.py",
+      "size_bytes": 117,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 6,
+      "type": "python"
+    },
+    {
+      "path": "backend/integrations/drive.py",
+      "size_bytes": 689,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 21,
+      "type": "python",
+      "functions": [
+        "build_install_url",
+        "save_authorization",
+        "get_token"
+      ],
+      "imports": [
+        "os",
+        "token_storage"
+      ]
+    },
+    {
+      "path": "backend/integrations/github.py",
+      "size_bytes": 619,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 21,
+      "type": "python",
+      "functions": [
+        "build_install_url",
+        "save_authorization",
+        "get_token"
+      ],
+      "imports": [
+        "os",
+        "token_storage"
+      ]
+    },
+    {
+      "path": "backend/integrations/slack.py",
+      "size_bytes": 1183,
+      "modified": "2026-05-19T20:35:17",
+      "line_count": 32,
+      "type": "python",
+      "purpose": "Slack integration helpers (skeleton). Use /integrations/slack/install to build the install URL. This module is a helper; the FastAPI endpoints live in backend/main.py.",
+      "functions": [
+        "build_install_url",
+        "save_authorization",
+        "get_token",
+        "exchange_code_for_token"
+      ],
+      "imports": [
+        "os",
+        "token_storage",
+        "urllib"
+      ]
+    },
+    {
+      "path": "backend/static/health.html",
+      "size_bytes": 63,
+      "modified": "2026-05-20T05:44:34",
+      "line_count": 1,
+      "type": "html",
+      "purpose": "<html><body><h1>JARVIS Backend</h1><p>Healthy</p></body></html>"
+    },
+    {
+      "path": "backend/static/meeting.html",
+      "size_bytes": 11368,
+      "modified": "2026-05-20T05:20:24",
+      "line_count": 323,
+      "type": "html",
+      "purpose": "<!DOCTYPE html>"
+    },
+    {
+      "path": "backend/static/meeting.js",
+      "size_bytes": 1466,
+      "modified": "2026-05-20T05:10:54",
+      "line_count": 37,
+      "type": "js",
+      "purpose": "(async function(){"
+    },
+    {
+      "path": "backend/tests/__init__.py",
+      "size_bytes": 59,
+      "modified": "2026-05-22T14:40:17",
+      "line_count": 3,
+      "type": "python",
+      "purpose": "Backend regression tests for the JARVIS web bridge."
+    },
+    {
+      "path": "backend/tests/e2e_notepad_test.txt",
+      "size_bytes": 16,
+      "modified": "2026-05-15T14:51:45",
+      "line_count": 1,
+      "type": "txt",
+      "purpose": "E2E test content"
+    },
+    {
+      "path": "backend/tests/test_jarvis_helpers.py",
+      "size_bytes": 4550,
+      "modified": "2026-05-28T16:35:35",
+      "line_count": 118,
+      "type": "python",
+      "classes": [
+        "BrowserMatchingTests",
+        "DiskAuditTests",
+        "ElevenLabsConfigTests",
+        "SelfKnowledgeTests",
+        "SelfImprovementTests"
+      ],
+      "imports": [
+        "__future__",
+        "jarvis_modules",
+        "pathlib",
+        "tempfile",
+        "unittest"
+      ]
+    },
+    {
+      "path": "backend/tests/test_web_bridge_core.py",
+      "size_bytes": 2742,
+      "modified": "2026-05-28T16:29:17",
+      "line_count": 62,
+      "type": "python",
+      "classes": [
+        "ExampleEnum",
+        "WebBridgeCoreTests"
+      ],
+      "imports": [
+        "__future__",
+        "backend",
+        "collections",
+        "enum",
+        "jarvis_web",
+        "json",
+        "unittest"
+      ]
+    },
+    {
+      "path": "jarvis-whatsapp/package-lock.json",
+      "size_bytes": 106243,
+      "modified": "2026-05-24T18:28:28",
+      "line_count": 2913,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis-whatsapp/package.json",
+      "size_bytes": 367,
+      "modified": "2026-05-24T18:26:43",
+      "line_count": 17,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "jarvis-whatsapp/whatsapp_bot.js",
+      "size_bytes": 10137,
+      "modified": "2026-05-25T07:40:48",
+      "line_count": 357,
+      "type": "js",
+      "purpose": "\"use strict\";"
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040083278.html",
+      "size_bytes": 551115,
+      "modified": "2026-05-24T18:49:12",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040084426.html",
+      "size_bytes": 551103,
+      "modified": "2026-05-24T19:02:44",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040093096.html",
+      "size_bytes": 551532,
+      "modified": "2026-05-25T07:43:26",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040094842.html",
+      "size_bytes": 551526,
+      "modified": "2026-05-25T08:06:28",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040100380.html",
+      "size_bytes": 551672,
+      "modified": "2026-05-25T19:03:47",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040128926.html",
+      "size_bytes": 552639,
+      "modified": "2026-05-26T21:49:45",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040191107.html",
+      "size_bytes": 549119,
+      "modified": "2026-05-27T09:21:36",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040219459.html",
+      "size_bytes": 549561,
+      "modified": "2026-05-27T19:51:22",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040258794.html",
+      "size_bytes": 555426,
+      "modified": "2026-05-28T05:10:46",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis-whatsapp/.wwebjs_cache/2.3000.1040266145.html",
+      "size_bytes": 552217,
+      "modified": "2026-05-28T08:27:18",
+      "type": "large_text",
+      "purpose": "Text file too large for detailed self-indexing."
+    },
+    {
+      "path": "jarvis_modules/__init__.py",
+      "size_bytes": 70,
+      "modified": "2026-05-22T14:38:35",
+      "line_count": 3,
+      "type": "python",
+      "purpose": "Small reusable helpers extracted from the main JARVIS runtime."
+    },
+    {
+      "path": "jarvis_modules/browser_matching.py",
+      "size_bytes": 2155,
+      "modified": "2026-05-22T14:38:35",
+      "line_count": 70,
+      "type": "python",
+      "purpose": "Fuzzy matching helpers for browser automation commands.",
+      "functions": [
+        "normalize_text",
+        "_words",
+        "score_text_match",
+        "best_text_match"
+      ],
+      "imports": [
+        "__future__",
+        "difflib",
+        "re",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_modules/disk_audit.py",
+      "size_bytes": 3872,
+      "modified": "2026-05-22T14:40:59",
+      "line_count": 122,
+      "type": "python",
+      "purpose": "Read-only disk cleanup reporting for JARVIS.",
+      "functions": [
+        "format_bytes",
+        "_safe_size",
+        "scan_folder",
+        "_existing_unique",
+        "build_disk_cleanup_report"
+      ],
+      "imports": [
+        "__future__",
+        "os",
+        "pathlib",
+        "tempfile",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_modules/elevenlabs_tts.py",
+      "size_bytes": 2369,
+      "modified": "2026-05-22T15:16:08",
+      "line_count": 70,
+      "type": "python",
+      "purpose": "ElevenLabs text-to-speech integration for JARVIS.",
+      "classes": [
+        "ElevenLabsTTSError"
+      ],
+      "functions": [
+        "api_key_from_config",
+        "is_enabled",
+        "synthesize_speech"
+      ],
+      "imports": [
+        "__future__",
+        "os",
+        "requests",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_modules/proactive_engine.py",
+      "size_bytes": 11961,
+      "modified": "2026-05-26T15:23:56",
+      "line_count": 299,
+      "type": "python",
+      "purpose": "Background proactive check-ins for JARVIS.",
+      "classes": [
+        "ProactiveEngine"
+      ],
+      "imports": [
+        "__future__",
+        "datetime",
+        "random",
+        "threading",
+        "time"
+      ]
+    },
+    {
+      "path": "jarvis_modules/relay_control.py",
+      "size_bytes": 1275,
+      "modified": "2026-05-25T20:52:13",
+      "line_count": 47,
+      "type": "python",
+      "purpose": "ESP8266 relay control for J.A.R.V.I.S.",
+      "classes": [
+        "RelayControl"
+      ],
+      "functions": [
+        "relay_on",
+        "relay_off",
+        "relay_status"
+      ],
+      "imports": [
+        "__future__",
+        "requests",
+        "typing"
+      ]
+    },
+    {
+      "path": "jarvis_modules/self_improvement.py",
+      "size_bytes": 4845,
+      "modified": "2026-05-28T16:34:45",
+      "line_count": 119,
+      "type": "python",
+      "purpose": "Guarded self-improvement request handling for JARVIS.",
+      "functions": [
+        "looks_like_self_improvement_request",
+        "safety_review",
+        "_load_requests",
+        "save_self_improvement_request",
+        "response_for_request"
+      ],
+      "imports": [
+        "__future__",
+        "datetime",
+        "json",
+        "pathlib",
+        "re",
+        "typing",
+        "uuid"
+      ]
+    },
+    {
+      "path": "jarvis_modules/self_knowledge.py",
+      "size_bytes": 9095,
+      "modified": "2026-05-28T16:21:21",
+      "line_count": 279,
+      "type": "python",
+      "purpose": "Safe self-knowledge indexing for the JARVIS project.",
+      "functions": [
+        "_is_sensitive",
+        "_read_text",
+        "_python_summary",
+        "_text_summary",
+        "_file_entry",
+        "build_self_knowledge",
+        "load_self_knowledge",
+        "compact_self_knowledge_text"
+      ],
+      "imports": [
+        "__future__",
+        "ast",
+        "datetime",
+        "json",
+        "os",
+        "pathlib",
+        "re",
+        "typing"
+      ]
+    },
+    {
+      "path": "mobile/README.md",
+      "size_bytes": 640,
+      "modified": "2026-05-18T15:43:58",
+      "line_count": 20,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S Mobile"
+    },
+    {
+      "path": "mobile/android/README.md",
+      "size_bytes": 1163,
+      "modified": "2026-05-26T16:04:52",
+      "line_count": 48,
+      "type": "md",
+      "purpose": "JARVIS Mobile Android"
+    },
+    {
+      "path": "mobile/android/build.gradle",
+      "size_bytes": 73,
+      "modified": "2026-05-26T15:59:14",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/gradle.properties",
+      "size_bytes": 53,
+      "modified": "2026-05-26T18:43:08",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/gradlew",
+      "size_bytes": 8728,
+      "modified": "2026-05-26T17:20:59",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/gradlew.bat",
+      "size_bytes": 2937,
+      "modified": "2026-05-26T17:20:59",
+      "line_count": 95,
+      "type": "bat",
+      "purpose": "@rem"
+    },
+    {
+      "path": "mobile/android/local.properties",
+      "size_bytes": 371,
+      "modified": "2026-05-26T17:17:55",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/settings.gradle",
+      "size_bytes": 331,
+      "modified": "2026-05-26T15:59:12",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/config.properties",
+      "size_bytes": 91,
+      "modified": "2026-05-26T17:17:56",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/file-system.probe",
+      "size_bytes": 8,
+      "modified": "2026-05-27T11:52:39",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/gc.properties",
+      "size_bytes": 0,
+      "modified": "2026-05-26T17:20:59",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/checksums/checksums.lock",
+      "size_bytes": 17,
+      "modified": "2026-05-27T11:52:43",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/checksums/md5-checksums.bin",
+      "size_bytes": 24997,
+      "modified": "2026-05-26T18:45:54",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/checksums/sha1-checksums.bin",
+      "size_bytes": 40853,
+      "modified": "2026-05-26T18:45:55",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/executionHistory/executionHistory.bin",
+      "size_bytes": 365081,
+      "modified": "2026-05-27T11:52:39",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/executionHistory/executionHistory.lock",
+      "size_bytes": 17,
+      "modified": "2026-05-27T11:52:43",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/fileChanges/last-build.bin",
+      "size_bytes": 1,
+      "modified": "2026-05-27T11:52:43",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/fileHashes/fileHashes.bin",
+      "size_bytes": 37497,
+      "modified": "2026-05-27T11:52:39",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/fileHashes/fileHashes.lock",
+      "size_bytes": 17,
+      "modified": "2026-05-27T11:52:43",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/9.0.0/fileHashes/resourceHashesCache.bin",
+      "size_bytes": 18837,
+      "modified": "2026-05-27T10:19:26",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/buildOutputCleanup/buildOutputCleanup.lock",
+      "size_bytes": 17,
+      "modified": "2026-05-27T11:52:43",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/buildOutputCleanup/cache.properties",
+      "size_bytes": 53,
+      "modified": "2026-05-26T17:19:47",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/buildOutputCleanup/outputFiles.bin",
+      "size_bytes": 22385,
+      "modified": "2026-05-27T11:52:41",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.gradle/vcs-1/gc.properties",
+      "size_bytes": 0,
+      "modified": "2026-05-26T17:20:59",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/.gitignore",
+      "size_bytes": 50,
+      "modified": "2026-05-26T17:18:30",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/.name",
+      "size_bytes": 12,
+      "modified": "2026-05-26T17:22:31",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/AndroidProjectSystem.xml",
+      "size_bytes": 217,
+      "modified": "2026-05-26T17:18:27",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/compiler.xml",
+      "size_bytes": 174,
+      "modified": "2026-05-26T17:22:31",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/deploymentTargetSelector.xml",
+      "size_bytes": 339,
+      "modified": "2026-05-26T17:34:13",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/gradle.xml",
+      "size_bytes": 639,
+      "modified": "2026-05-26T17:22:32",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/migrations.xml",
+      "size_bytes": 263,
+      "modified": "2026-05-26T17:18:28",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/misc.xml",
+      "size_bytes": 457,
+      "modified": "2026-05-26T18:46:48",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/runConfigurations.xml",
+      "size_bytes": 980,
+      "modified": "2026-05-26T17:18:28",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/vcs.xml",
+      "size_bytes": 191,
+      "modified": "2026-05-26T17:18:28",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/workspace.xml",
+      "size_bytes": 8006,
+      "modified": "2026-05-26T18:45:35",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/.idea/caches/deviceStreaming.xml",
+      "size_bytes": 89716,
+      "modified": "2026-05-26T17:22:31",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/build.gradle",
+      "size_bytes": 479,
+      "modified": "2026-05-26T15:59:49",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/AndroidManifest.xml",
+      "size_bytes": 3347,
+      "modified": "2026-05-27T10:58:16",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/assets/mobile/app.js",
+      "size_bytes": 19722,
+      "modified": "2026-05-27T11:12:35",
+      "line_count": 586,
+      "type": "js",
+      "purpose": "const $ = (id) => document.getElementById(id);"
+    },
+    {
+      "path": "mobile/android/app/src/main/assets/mobile/index.html",
+      "size_bytes": 9314,
+      "modified": "2026-05-27T11:11:49",
+      "line_count": 222,
+      "type": "html",
+      "purpose": "<!doctype html>"
+    },
+    {
+      "path": "mobile/android/app/src/main/assets/mobile/styles.css",
+      "size_bytes": 11416,
+      "modified": "2026-05-26T21:14:56",
+      "line_count": 586,
+      "type": "css",
+      "purpose": ":root {"
+    },
+    {
+      "path": "mobile/android/app/src/main/assets/mobile/assets/README.md",
+      "size_bytes": 139,
+      "modified": "2026-05-26T16:04:51",
+      "line_count": 6,
+      "type": "md",
+      "purpose": "Place the custom opening video here as:"
+    },
+    {
+      "path": "mobile/android/app/src/main/assets/mobile/assets/intro.mp4",
+      "size_bytes": 3811258,
+      "modified": "2026-05-27T10:24:21",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/java/com/prashant/jarvismobile/JarvisAccessibilityService.java",
+      "size_bytes": 8187,
+      "modified": "2026-05-27T11:10:02",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/java/com/prashant/jarvismobile/MainActivity.java",
+      "size_bytes": 22519,
+      "modified": "2026-05-27T11:13:16",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/java/com/prashant/jarvismobile/NormalCallSecretaryService.java",
+      "size_bytes": 5260,
+      "modified": "2026-05-27T10:15:49",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/res/drawable/ic_launcher.xml",
+      "size_bytes": 785,
+      "modified": "2026-05-26T15:59:27",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/res/values/styles.xml",
+      "size_bytes": 721,
+      "modified": "2026-05-27T11:08:55",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/res/xml/file_paths.xml",
+      "size_bytes": 229,
+      "modified": "2026-05-26T15:59:26",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/app/src/main/res/xml/jarvis_accessibility_service.xml",
+      "size_bytes": 499,
+      "modified": "2026-05-27T10:58:52",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/gradle/wrapper/gradle-wrapper.jar",
+      "size_bytes": 45457,
+      "modified": "2026-05-26T17:20:59",
+      "type": "non_text"
+    },
+    {
+      "path": "mobile/android/gradle/wrapper/gradle-wrapper.properties",
+      "size_bytes": 252,
+      "modified": "2026-05-26T17:20:59",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/CRONTAB.md",
+      "size_bytes": 1607,
+      "modified": "2026-05-20T05:56:14",
+      "line_count": 37,
+      "type": "md",
+      "purpose": "Crontab entries for J.A.R.V.I.S maintenance tasks"
+    },
+    {
+      "path": "scripts/create_selfsigned_cert.ps1",
+      "size_bytes": 1086,
+      "modified": "2026-05-19T20:46:00",
+      "line_count": 22,
+      "type": "ps1",
+      "purpose": "param("
+    },
+    {
+      "path": "scripts/get_cert.sh",
+      "size_bytes": 341,
+      "modified": "2026-05-19T20:35:17",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/install_playwright.ps1",
+      "size_bytes": 213,
+      "modified": "2026-05-19T20:52:19",
+      "line_count": 4,
+      "type": "ps1",
+      "purpose": "# Install Playwright Python and browsers"
+    },
+    {
+      "path": "scripts/install_playwright.sh",
+      "size_bytes": 129,
+      "modified": "2026-05-19T20:52:19",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/rotate_audit.ps1",
+      "size_bytes": 1132,
+      "modified": "2026-05-20T05:56:05",
+      "line_count": 33,
+      "type": "ps1",
+      "purpose": "# Audit rotation script for Windows PowerShell"
+    },
+    {
+      "path": "scripts/rotate_audit.sh",
+      "size_bytes": 598,
+      "modified": "2026-05-20T05:55:59",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/run_docker_compose.ps1",
+      "size_bytes": 162,
+      "modified": "2026-05-19T20:46:00",
+      "line_count": 7,
+      "type": "ps1",
+      "purpose": "param("
+    },
+    {
+      "path": "scripts/setup_coturn.sh",
+      "size_bytes": 314,
+      "modified": "2026-05-19T20:35:17",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/backend/certs/cert.pem",
+      "size_bytes": 0,
+      "modified": "2026-05-19T20:57:33",
+      "type": "non_text"
+    },
+    {
+      "path": "scripts/backend/certs/key.pem",
+      "size_bytes": 0,
+      "modified": "2026-05-19T20:57:34",
+      "type": "non_text"
+    },
+    {
+      "path": "web/FEATURES.md",
+      "size_bytes": 3267,
+      "modified": "2026-05-20T21:37:13",
+      "line_count": 42,
+      "type": "md",
+      "purpose": "J.A.R.V.I.S. Web Interface Features"
+    },
+    {
+      "path": "web/app.js",
+      "size_bytes": 137350,
+      "modified": "2026-05-24T12:22:32",
+      "line_count": 3965,
+      "type": "js",
+      "purpose": "/*"
+    },
+    {
+      "path": "web/index.html",
+      "size_bytes": 50244,
+      "modified": "2026-05-24T11:21:30",
+      "line_count": 1085,
+      "type": "html",
+      "purpose": "<!DOCTYPE html>"
+    },
+    {
+      "path": "web/jarvis-upgrade.css",
+      "size_bytes": 15351,
+      "modified": "2026-05-23T07:38:08",
+      "line_count": 507,
+      "type": "css",
+      "purpose": "/*"
+    },
+    {
+      "path": "web/style.css",
+      "size_bytes": 167965,
+      "modified": "2026-05-24T12:26:38",
+      "line_count": 7387,
+      "type": "css",
+      "purpose": "/*"
+    },
+    {
+      "path": "web/assets/A_premium_highly_aesthetic_fu.mp4",
+      "size_bytes": 3568974,
+      "modified": "2026-05-21T18:46:18",
+      "type": "non_text"
+    },
+    {
+      "path": "web/assets/biometric-scan.gif",
+      "size_bytes": 21392260,
+      "modified": "2026-05-21T15:24:22",
+      "type": "non_text"
+    },
+    {
+      "path": "web/assets/jarvis-opening.mp4",
+      "size_bytes": 3719871,
+      "modified": "2026-05-21T16:13:45",
+      "type": "non_text"
+    },
+    {
+      "path": "web/assets/orbs/cyan-wave-ring.gif",
+      "size_bytes": 1898818,
+      "modified": "2026-05-21T15:24:19",
+      "type": "non_text"
+    },
+    {
+      "path": "web/assets/orbs/network-sphere.jpg",
+      "size_bytes": 32974,
+      "modified": "2026-05-21T15:24:18",
+      "type": "non_text"
+    },
+    {
+      "path": "web/assets/orbs/particle-sphere.gif",
+      "size_bytes": 1444869,
+      "modified": "2026-05-21T15:24:19",
+      "type": "non_text"
+    },
+    {
+      "path": "web/previews/glass-lockscreen.css",
+      "size_bytes": 14420,
+      "modified": "2026-05-23T07:15:50",
+      "line_count": 481,
+      "type": "css",
+      "purpose": "/*"
+    },
+    {
+      "path": "web/previews/lockscreen-glass-preview.html",
+      "size_bytes": 3716,
+      "modified": "2026-05-23T07:23:21",
+      "line_count": 134,
+      "type": "html",
+      "purpose": "<!DOCTYPE html>"
+    },
+    {
+      "path": "web/previews/new_lockscreen_glass.html",
+      "size_bytes": 3755,
+      "modified": "2026-05-23T07:15:50",
+      "line_count": 107,
+      "type": "html",
+      "purpose": "<!--"
+    },
+    {
+      "path": "yjs_server/Dockerfile",
+      "size_bytes": 138,
+      "modified": "2026-05-19T21:13:02",
+      "line_count": 8,
+      "type": "dockerfile",
+      "purpose": "FROM node:18-alpine"
+    },
+    {
+      "path": "yjs_server/package.json",
+      "size_bytes": 204,
+      "modified": "2026-05-19T21:12:47",
+      "line_count": 13,
+      "type": "json",
+      "purpose": "Configuration or structured data file."
+    },
+    {
+      "path": "yjs_server/server.js",
+      "size_bytes": 1160,
+      "modified": "2026-05-19T21:12:47",
+      "line_count": 50,
+      "type": "js",
+      "purpose": "const WebSocket = require(\"ws\");"
+    }
+  ],
+  "skipped": {
+    "directories": 25,
+    "sensitive_files": 5,
+    "non_text_or_large_files": 80,
+    "entry_limit": 0
+  }
+}

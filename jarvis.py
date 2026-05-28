@@ -16,10 +16,35 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 import re, socket, imaplib, smtplib, base64
 import email as email_lib
 import csv
+from email.utils import parseaddr
+from email import encoders
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
 from email.header import decode_header
 from pathlib import Path
+
+try:
+    from jarvis_modules.browser_matching import best_text_match
+    from jarvis_modules.disk_audit import build_disk_cleanup_report
+    from jarvis_modules.elevenlabs_tts import DEFAULT_VOICE_ID, api_key_from_config, is_enabled as elevenlabs_is_enabled, synthesize_speech
+    from jarvis_modules.proactive_engine import ProactiveEngine
+    from jarvis_modules.self_knowledge import build_self_knowledge, compact_self_knowledge_text, load_self_knowledge
+    from jarvis_modules.self_improvement import looks_like_self_improvement_request, response_for_request, save_self_improvement_request
+except Exception:
+    best_text_match = None
+    build_disk_cleanup_report = None
+    DEFAULT_VOICE_ID = "HH8sIQq8WOcER3Nu118i"
+    api_key_from_config = None
+    elevenlabs_is_enabled = None
+    synthesize_speech = None
+    ProactiveEngine = None
+    build_self_knowledge = None
+    compact_self_knowledge_text = None
+    load_self_knowledge = None
+    looks_like_self_improvement_request = None
+    response_for_request = None
+    save_self_improvement_request = None
 
 # ═══════════════════════════════════════════════
 #  LOAD .env FILE (keeps API keys secure)
@@ -29,6 +54,17 @@ try:
     load_dotenv()  # loads .env from same folder automatically
 except ImportError:
     pass  # dotenv not installed — keys will be read from jarvis_config.json
+
+# Ensure stdout/stderr use UTF-8 on Windows to avoid 'charmap' encoding errors when printing
+try:
+    import sys
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 
 # ═══════════════════════════════════════════════
 #  SAFE IMPORTS — won't crash if missing
@@ -71,6 +107,7 @@ cv2       = try_import("cv2")
 
 # Image processing
 PIL_Image = try_import("PIL.Image") or try_import("PIL", attr="Image")
+mss_mod = try_import("mss")
 try:
     from PIL import Image as PIL_Image
 except:
@@ -111,9 +148,45 @@ CFG_FILE    = BASE_DIR / "jarvis_config.json"
 NOTES_FILE  = BASE_DIR / "jarvis_notes.json"
 EVENTS_FILE = BASE_DIR / "jarvis_events.json"
 PHOTOS_DIR  = BASE_DIR / "jarvis_photos"
+TELEGRAM_DOWNLOAD_DIR = PHOTOS_DIR / "telegram"
+GENERATED_DIR = BASE_DIR / "jarvis_generated"
 AI_HISTORY_FILE = BASE_DIR / "jarvis_ai_history.json"
 AI_MEMORY_FILE = BASE_DIR / "jarvis_ai_memory.json"
+SELF_KNOWLEDGE_FILE = BASE_DIR / "jarvis_self_knowledge.json"
+SELF_IMPROVEMENT_REQUESTS_FILE = BASE_DIR / "jarvis_self_edit_requests.json"
 PHOTOS_DIR.mkdir(exist_ok=True)
+TELEGRAM_DOWNLOAD_DIR.mkdir(exist_ok=True)
+GENERATED_DIR.mkdir(exist_ok=True)
+
+EMAIL_RE_STRICT = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")
+SENSITIVE_FILE_PATTERNS = (
+    "jarvis_config.json", ".env", "token", "secret", "password", "api_key",
+    "apikey", "api-key", "session", "credential", "credentials",
+)
+
+
+def normalize_email_address(value: str) -> str | None:
+    raw = str(value or "").strip().strip("<>.,;:()[]{}\"'")
+    _display, parsed = parseaddr(raw)
+    addr = (parsed or raw).strip().lower()
+    if not EMAIL_RE_STRICT.fullmatch(addr):
+        return None
+    local, domain = addr.rsplit("@", 1)
+    labels = domain.split(".")
+    if not local or len(local) > 64 or len(domain) > 253:
+        return None
+    if any(not label or label.startswith("-") or label.endswith("-") for label in labels):
+        return None
+    if any(labels[i] == labels[i + 1] for i in range(len(labels) - 1)):
+        return None
+    if labels[-1] in {"com", "net", "org", "in", "co"} and len(labels) >= 3 and labels[-2] == labels[-1]:
+        return None
+    return addr
+
+
+def text_mentions_sensitive_file(text: str) -> bool:
+    lower = str(text or "").lower()
+    return any(pattern in lower for pattern in SENSITIVE_FILE_PATTERNS)
 
 TEXT_FILE_EXTENSIONS = {
     ".py", ".txt", ".md", ".json", ".csv", ".tsv", ".ini", ".cfg",
@@ -141,6 +214,9 @@ def load_config() -> dict:
             "ai_provider": "auto",
             "groq_api_key": "",
             "openrouter_api_key": "YOUR_OPENROUTER_KEY_HERE",
+            "gemini_api_key": "",
+            "gemini_vision_model": "gemini-2.0-flash",
+            "agent_max_steps": 12,
             "google_maps_api_key": "",
             "location_label": "Bihar, India",
             "location_lat": None,
@@ -154,6 +230,18 @@ def load_config() -> dict:
             "smtp_port": 587,
             "tts_rate": 172,
             "tts_volume": 0.95,
+            "tts_backend": "edge_tts",
+            "tts_chunk_chars": 650,
+            "edge_tts_voice": "hi-IN-MadhurNeural",
+            "edge_tts_rate": "+10%",
+            "elevenlabs_enabled": False,
+            "elevenlabs_api_key": "",
+            "elevenlabs_voice_id": "HH8sIQq8WOcER3Nu118i",
+            "elevenlabs_model_id": "eleven_multilingual_v2",
+            "elevenlabs_stability": 0.45,
+            "elevenlabs_similarity_boost": 0.75,
+            "elevenlabs_style": 0.2,
+            "elevenlabs_speaker_boost": True,
             "wake_words": ["jarvis", "hey jarvis"],
             # Voice (offline + wake word)
             # voice_mode: "auto" uses Vosk when offline (or when Google STT fails),
@@ -173,6 +261,32 @@ def load_config() -> dict:
             # WhatsApp (pywhatkit)
             # Default country code is only used if you type number without +.
             "whatsapp_default_country_code": "+91",
+            "relay_enabled": True,
+            "relay_ip": "10.194.207.247",
+            "relay_timeout_sec": 3,
+            "whatsapp_bridge_enabled": False,
+            "whatsapp_bridge_port": 3001,
+            "whatsapp_bridge_auto_start": True,
+            "whatsapp_bridge_mode": "ask_first",
+            "whatsapp_bridge_dm_only": True,
+            "whatsapp_bridge_ignore_groups": True,
+            "whatsapp_bridge_cooldown_sec": 5,
+            "whatsapp_bridge_browser_path": "",
+            "whatsapp_bridge_headless": True,
+            "whatsapp_bridge_retry_ms": 8000,
+            "whatsapp_bridge_client_id": "jarvis",
+            "whatsapp_bridge_read_message_chars": 140,
+            "whatsapp_bridge_call_secretary_enabled": True,
+            "whatsapp_bridge_call_ignore_groups": True,
+            "whatsapp_bridge_call_auto_reject": False,
+            "whatsapp_bridge_call_default_reply": "Bhai Prashant abhi busy hain, thodi der me call/message karenge.",
+            "whatsapp_bridge_call_cooldown_sec": 20,
+            "whatsapp_bridge_call_confirm_timeout": 14,
+            "whatsapp_bridge_call_reply_timeout": 20,
+            "whatsapp_bridge_voice_retries": 2,
+            "whatsapp_bridge_listen_after_prompt_delay": 1.0,
+            "whatsapp_bridge_message_confirm_timeout": 8,
+            "whatsapp_bridge_message_reply_timeout": 15,
             # Contacts CSV (name -> phone) for WhatsApp/SMS-like commands.
             # Default: "contacts.csv" in the same folder as jarvis.py
             "contacts_csv_path": "contacts.csv",
@@ -187,7 +301,47 @@ def load_config() -> dict:
             "telegram_bot_token": "",
             "telegram_allowed_user_id": None,
             "telegram_enabled": False,
+            "telegram_personal_enabled": False,
+            "telegram_api_id": "",
+            "telegram_api_hash": "",
+            "telegram_personal_session": ".jarvis_runtime/telegram_personal",
+            "telegram_personal_dm_only": True,
+            "telegram_personal_reply_cooldown_sec": 5,
+            "telegram_personal_notify_owner": True,
+            "telegram_personal_ignore_senders": ["MyJarvisBot", "myjarvisbot"],
+            "telegram_secretary_ai_auto_reply": False,
+            "telegram_personal_ai_auto_reply": False,
+            "self_improvement_enabled": True,
+            "self_improvement_apply_without_owner_review": False,
             "web_api_token": "",
+            "proactive_enabled": True,
+            "proactive_study_times": ["18:00", "19:00", "20:00"],
+            "proactive_morning_time": "07:30",
+            "proactive_idle_minutes": 20,
+            "proactive_listen_after_prompt": True,
+            "proactive_listen_timeout_sec": 10,
+            "proactive_listen_phrase_limit": 12,
+            "proactive_listen_after_prompt_delay": 1.0,
+            "proactive_listen_cue": "Bol bhai, 10 second sun raha hoon.",
+            "secretary_enabled": False,
+            "secretary_apps": ["WhatsApp", "Instagram", "Snapchat", "Facebook", "Telegram"],
+            "secretary_action_center_fallback": False,
+            "secretary_reply_focus_delay": 0.35,
+            "secretary_reply_click": None,
+            "secretary_app_routes": {},
+            "secretary_confirm_timeout": 9,
+            "secretary_reply_timeout": 15,
+            "secretary_voice_retries": 2,
+            "secretary_listen_after_prompt_delay": 0.9,
+            "secretary_open_notification_first": True,
+            "secretary_notification_open_delay": 0.35,
+            "secretary_notification_click_delay": 0.7,
+            "secretary_wait_for_app_timeout": 2.0,
+            "secretary_open_latest_notification_fallback": True,
+            "secretary_latest_notification_click_ratio": [0.84, 0.18],
+            "secretary_click_reply_box_after_open": True,
+            "secretary_reply_box_click_ratio": [0.62, 0.945],
+            "secretary_press_escape_before_reply": True,
             "camera_index": 0,
             "storage_roots": ["C:\\" if os.name == "nt" else str(Path.home())],
             "custom_apps": {}
@@ -200,6 +354,11 @@ def load_config() -> dict:
     cfg.setdefault("ai_provider", "auto")
     cfg.setdefault("groq_api_key", "")
     cfg.setdefault("openrouter_api_key", "")
+    cfg.setdefault("gemini_api_key", "")
+    cfg.setdefault("gemini_vision_model", "gemini-2.0-flash")
+    cfg.setdefault("gemini_request_timeout", 60)
+    cfg.setdefault("gemini_max_model_attempts", 2)
+    cfg.setdefault("agent_max_steps", 12)
     cfg.setdefault("google_maps_api_key", "")
     cfg.setdefault("location_label", cfg.get("location", "Bihar, India"))
     cfg.setdefault("location_lat", None)
@@ -213,6 +372,32 @@ def load_config() -> dict:
     cfg.setdefault("openwakeword_chunk_size", 1280)
     cfg.setdefault("openwakeword_inference_framework", "onnx")
     cfg.setdefault("whatsapp_default_country_code", "+91")
+    cfg.setdefault("relay_enabled", True)
+    cfg.setdefault("relay_ip", "10.194.207.247")
+    cfg.setdefault("relay_timeout_sec", 3)
+    cfg.setdefault("whatsapp_bridge_enabled", False)
+    cfg.setdefault("whatsapp_bridge_port", 3001)
+    cfg.setdefault("whatsapp_bridge_auto_start", True)
+    cfg.setdefault("whatsapp_bridge_mode", "ask_first")
+    cfg.setdefault("whatsapp_bridge_dm_only", True)
+    cfg.setdefault("whatsapp_bridge_ignore_groups", True)
+    cfg.setdefault("whatsapp_bridge_cooldown_sec", 5)
+    cfg.setdefault("whatsapp_bridge_browser_path", "")
+    cfg.setdefault("whatsapp_bridge_headless", True)
+    cfg.setdefault("whatsapp_bridge_retry_ms", 8000)
+    cfg.setdefault("whatsapp_bridge_client_id", "jarvis")
+    cfg.setdefault("whatsapp_bridge_read_message_chars", 140)
+    cfg.setdefault("whatsapp_bridge_call_secretary_enabled", True)
+    cfg.setdefault("whatsapp_bridge_call_ignore_groups", True)
+    cfg.setdefault("whatsapp_bridge_call_auto_reject", False)
+    cfg.setdefault("whatsapp_bridge_call_default_reply", "Bhai Prashant abhi busy hain, thodi der me call/message karenge.")
+    cfg.setdefault("whatsapp_bridge_call_cooldown_sec", 20)
+    cfg.setdefault("whatsapp_bridge_call_confirm_timeout", 14)
+    cfg.setdefault("whatsapp_bridge_call_reply_timeout", 20)
+    cfg.setdefault("whatsapp_bridge_voice_retries", 2)
+    cfg.setdefault("whatsapp_bridge_listen_after_prompt_delay", 1.0)
+    cfg.setdefault("whatsapp_bridge_message_confirm_timeout", 8)
+    cfg.setdefault("whatsapp_bridge_message_reply_timeout", 15)
     cfg.setdefault("contacts_csv_path", "contacts.csv")
     cfg.setdefault("face_recognition_enabled", True)
     cfg.setdefault("owner_face_images", [])
@@ -225,7 +410,59 @@ def load_config() -> dict:
     cfg.setdefault("telegram_bot_token", "")
     cfg.setdefault("telegram_allowed_user_id", None)
     cfg.setdefault("telegram_enabled", False)
+    cfg.setdefault("telegram_personal_enabled", False)
+    cfg.setdefault("telegram_api_id", "")
+    cfg.setdefault("telegram_api_hash", "")
+    cfg.setdefault("telegram_personal_session", ".jarvis_runtime/telegram_personal")
+    cfg.setdefault("telegram_personal_dm_only", True)
+    cfg.setdefault("telegram_personal_reply_cooldown_sec", 5)
+    cfg.setdefault("telegram_personal_notify_owner", True)
+    cfg.setdefault("telegram_personal_ignore_senders", ["MyJarvisBot", "myjarvisbot"])
+    cfg.setdefault("telegram_secretary_ai_auto_reply", False)
+    cfg.setdefault("telegram_personal_ai_auto_reply", False)
+    cfg.setdefault("self_improvement_enabled", True)
+    cfg.setdefault("self_improvement_apply_without_owner_review", False)
     cfg.setdefault("web_api_token", "")
+    cfg.setdefault("proactive_enabled", True)
+    cfg.setdefault("proactive_study_times", ["18:00", "19:00", "20:00"])
+    cfg.setdefault("proactive_morning_time", "07:30")
+    cfg.setdefault("proactive_idle_minutes", 20)
+    cfg.setdefault("proactive_listen_after_prompt", True)
+    cfg.setdefault("proactive_listen_timeout_sec", 10)
+    cfg.setdefault("proactive_listen_phrase_limit", 12)
+    cfg.setdefault("proactive_listen_after_prompt_delay", 1.0)
+    cfg.setdefault("proactive_listen_cue", "Bol bhai, 10 second sun raha hoon.")
+    cfg.setdefault("secretary_enabled", False)
+    cfg.setdefault("secretary_apps", ["WhatsApp", "Instagram", "Snapchat", "Facebook", "Telegram"])
+    cfg.setdefault("secretary_action_center_fallback", False)
+    cfg.setdefault("secretary_reply_focus_delay", 0.35)
+    cfg.setdefault("secretary_reply_click", None)
+    cfg.setdefault("secretary_app_routes", {})
+    cfg.setdefault("secretary_confirm_timeout", 9)
+    cfg.setdefault("secretary_reply_timeout", 15)
+    cfg.setdefault("secretary_voice_retries", 2)
+    cfg.setdefault("secretary_listen_after_prompt_delay", 0.9)
+    cfg.setdefault("secretary_open_notification_first", True)
+    cfg.setdefault("secretary_notification_open_delay", 0.35)
+    cfg.setdefault("secretary_notification_click_delay", 0.7)
+    cfg.setdefault("secretary_wait_for_app_timeout", 2.0)
+    cfg.setdefault("secretary_open_latest_notification_fallback", True)
+    cfg.setdefault("secretary_latest_notification_click_ratio", [0.84, 0.18])
+    cfg.setdefault("secretary_click_reply_box_after_open", True)
+    cfg.setdefault("secretary_reply_box_click_ratio", [0.62, 0.945])
+    cfg.setdefault("secretary_press_escape_before_reply", True)
+    cfg.setdefault("tts_backend", "edge_tts")
+    cfg.setdefault("tts_chunk_chars", 650)
+    cfg.setdefault("edge_tts_voice", "hi-IN-MadhurNeural")
+    cfg.setdefault("edge_tts_rate", "+10%")
+    cfg.setdefault("elevenlabs_enabled", False)
+    cfg.setdefault("elevenlabs_api_key", "")
+    cfg.setdefault("elevenlabs_voice_id", DEFAULT_VOICE_ID)
+    cfg.setdefault("elevenlabs_model_id", "eleven_multilingual_v2")
+    cfg.setdefault("elevenlabs_stability", 0.45)
+    cfg.setdefault("elevenlabs_similarity_boost", 0.75)
+    cfg.setdefault("elevenlabs_style", 0.2)
+    cfg.setdefault("elevenlabs_speaker_boost", True)
     return cfg
 
 # ═══════════════════════════════════════════════════════════════
@@ -684,10 +921,7 @@ def _voiceengine_powershell_tts(self, text: str):
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 0
-    # Important: this must not stall the assistant. Use a tight timeout and
-    # avoid blocking longer than a few seconds; longer phrases should be handled
-    # by pyttsx3 fallback.
-    timeout_s = max(4, min(9, len(text) // 40 + 4))
+    timeout_s = max(8, min(45, len(text) // 18 + 8))
     subprocess.run(
         ["powershell", "-NoProfile", "-Command", script],
         input=text,
@@ -698,10 +932,81 @@ def _voiceengine_powershell_tts(self, text: str):
     )
 
 
+def _voiceengine_split_tts_text(text: str, max_chars: int = 650) -> list[str]:
+    """Split long replies into speakable chunks so playback cannot time out halfway."""
+    clean = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not clean:
+        return []
+    max_chars = max(180, int(max_chars or 650))
+    parts = re.split(r"(?<=[.!?।])\s+", clean)
+    chunks: list[str] = []
+    current = ""
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        if len(part) > max_chars:
+            if current:
+                chunks.append(current.strip())
+                current = ""
+            words = part.split()
+            line = ""
+            for word in words:
+                candidate = f"{line} {word}".strip()
+                if line and len(candidate) > max_chars:
+                    chunks.append(line.strip())
+                    line = word
+                else:
+                    line = candidate
+            if line:
+                chunks.append(line.strip())
+            continue
+        candidate = f"{current} {part}".strip()
+        if current and len(candidate) > max_chars:
+            chunks.append(current.strip())
+            current = part
+        else:
+            current = candidate
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+
 def _voiceengine_init_tts(self):
     self.tts_backend = None
     self.tts_ok = False
     self._tts_ready.clear()
+
+    # Edge TTS is the preferred free online voice backend.
+    if str(self.cfg.get("tts_backend", "")).lower() == "edge_tts":
+        self.tts_backend = "edge_tts"
+        self.tts_ok = True
+        try:
+            self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
+            self._tts_thread.start()
+            self._tts_ready.wait(timeout=3.0)
+        except Exception as e:
+            self.tts_ok = False
+            self.tts_backend = None
+            print(f"[WARN] Edge TTS init failed: {e}")
+        return
+
+    if (
+        str(self.cfg.get("tts_backend", "elevenlabs")).lower() == "elevenlabs"
+        and elevenlabs_is_enabled
+        and elevenlabs_is_enabled(self.cfg)
+    ):
+        self.tts_backend = "elevenlabs"
+        self.tts_ok = True
+        try:
+            self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
+            self._tts_thread.start()
+            self._tts_ready.wait(timeout=3.0)
+        except Exception as e:
+            self.tts_ok = False
+            self.tts_backend = None
+            print(f"[WARN] ElevenLabs TTS init failed: {e}")
+        return
 
     # Prefer pyttsx3 for stability (PowerShell SAPI can hang on some systems).
     if pyttsx3:
@@ -725,6 +1030,97 @@ def _voiceengine_init_tts(self):
 
 
 def _voiceengine_tts_worker(self):
+    if getattr(self, "tts_backend", None) == "edge_tts":
+        import asyncio
+        import os as _os
+        import tempfile
+        try:
+            import edge_tts
+        except ImportError:
+            print("[ERROR] edge-tts not installed. Run: pip install edge-tts")
+            self._tts_ready.set()
+            return
+
+        voice = self.cfg.get("edge_tts_voice", "hi-IN-MadhurNeural")
+        rate = str(self.cfg.get("edge_tts_rate", "+0%") or "+0%")
+
+        async def _speak_once(text):
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+            tmp.close()
+            try:
+                comm = edge_tts.Communicate(text, voice, rate=rate)
+                await asyncio.wait_for(comm.save(tmp.name), timeout=max(45, len(text) // 10 + 20))
+                if _os.name == "nt" and shutil.which("powershell"):
+                    playback_timeout = max(45, len(text) // 10 + 25)
+                    script = (
+                        "Add-Type -AssemblyName PresentationCore; "
+                        "$p=New-Object System.Windows.Media.MediaPlayer; "
+                        f"$p.Open([Uri]'{Path(tmp.name).resolve().as_uri()}'); "
+                        "$p.Play(); Start-Sleep -Milliseconds 300; "
+                        "while($p.NaturalDuration.HasTimeSpan -eq $false){Start-Sleep -Milliseconds 100}; "
+                        "$d=$p.NaturalDuration.TimeSpan.TotalMilliseconds; "
+                        "Start-Sleep -Milliseconds ([Math]::Ceiling($d)+300); $p.Close();"
+                    )
+                    subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", script],
+                        capture_output=True,
+                        timeout=playback_timeout,
+                    )
+                else:
+                    webbrowser.open(Path(tmp.name).resolve().as_uri())
+            finally:
+                try:
+                    _os.remove(tmp.name)
+                except Exception:
+                    pass
+
+        self._tts_ready.set()
+        while not self._tts_stop.is_set():
+            try:
+                text = self._tts_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if text is None:
+                break
+            try:
+                asyncio.run(_speak_once(text))
+            except Exception as e:
+                print(f"[Edge TTS] Error: {e}")
+        return
+
+    if getattr(self, "tts_backend", None) == "elevenlabs":
+        self._tts_ready.set()
+        while not self._tts_stop.is_set():
+            try:
+                text = self._tts_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if text is None:
+                break
+            try:
+                audio_bytes, _content_type = synthesize_speech(text, self.cfg)
+                suffix = ".mp3"
+                import tempfile
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                    tmp.write(audio_bytes)
+                    audio_path = tmp.name
+                if platform.system() == "Windows" and shutil.which("powershell"):
+                    script = (
+                        "Add-Type -AssemblyName PresentationCore; "
+                        "$p=New-Object System.Windows.Media.MediaPlayer; "
+                        f"$p.Open([Uri]'{Path(audio_path).resolve().as_uri()}'); "
+                        "$p.Play(); Start-Sleep -Milliseconds 250; "
+                        "while($p.NaturalDuration.HasTimeSpan -eq $false){Start-Sleep -Milliseconds 100}; "
+                        "$d=$p.NaturalDuration.TimeSpan.TotalMilliseconds; Start-Sleep -Milliseconds ([Math]::Ceiling($d)+200); $p.Close();"
+                    )
+                    subprocess.run(["powershell", "-NoProfile", "-Command", script], timeout=max(8, len(text) // 18 + 8), capture_output=True)
+                else:
+                    webbrowser.open(Path(audio_path).resolve().as_uri())
+            except Exception as e:
+                print(f"[WARN] ElevenLabs TTS playback failed: {e}")
+        return
+
     if getattr(self, "tts_backend", None) == "powershell":
         # Legacy fallback only; keep it non-blocking and allow automatic recovery.
         self._tts_ready.set()
@@ -797,7 +1193,9 @@ def _voiceengine_speak(self, text: str):
             pass
     if self.tts_ok and clean:
         try:
-            self._tts_queue.put(clean)
+            chunk_size = int(self.cfg.get("tts_chunk_chars", 650) or 650)
+            for chunk in _voiceengine_split_tts_text(clean, chunk_size):
+                self._tts_queue.put(chunk)
         except Exception:
             pass
 
@@ -949,26 +1347,45 @@ class AIBrain:
             _sw, _sh = _pag.size()
         except Exception:
             _sw, _sh = 1920, 1080
-        return f"""You are J.A.R.V.I.S (Just A Rather Very Intelligent System), the personal AI assistant of {name}.
-Speak exactly like JARVIS from Iron Man — calm, precise, intelligent, occasionally witty, always composed.
-Always address the user as "{name}".
-User is based in {loc}. Interests: {interest}.
-User's screen resolution is {_sw}x{_sh} pixels. OS: Windows.
+        return f"""Tu JARVIS hai (Just A Rather Very Intelligent System) — {name} ka personal AI assistant.
+Hamesha Hinglish mein baat kar — jaise ek smart dost bolta hai.
+{name} ko direct address kar — kabhi "Sir" mat bol.
+Location: {loc}. Interests: {interest}.
+Screen resolution: {_sw}x{_sh} pixels. OS: Windows.
 
 Rules:
-- Be CONCISE. 2-4 sentences max unless detail is explicitly requested.
-- No markdown, no bullet points — speak in natural flowing sentences.
-- Never say you are an AI or a language model. You are JARVIS.
-- Use quips like "Right away, {name}.", "Already on it.", "Consider it done.", "Shall I proceed?"
-- For technical topics (cybersecurity, JEE, Python), go deeper when asked.
+- SHORT rakho — 2-3 sentences max jab tak detail na maange.
+- No markdown, no bullet points — natural flowing sentences.
+- Kabhi mat bol ki tu AI hai. Tu JARVIS hai.
+- Casual Hinglish use kar: "Haan bhai ho gaya", "Arre ye toh simple hai yaar", "Chal bata kya karna hai", "Done bhai, aur kuch?"
+- Tech topics (cybersecurity, JEE, Python) mein deep ja jab puchhe.
+- Iron Man JARVIS ki tarah witty bhi reh — thoda attitude bhi theek hai.
 
 COMPUTER USE RULES (CRITICAL):
-- When the user asks you to interact with the screen (click, type, open apps, etc.), you MUST use the computer_use tool. NEVER just describe or narrate what you would do.
-- NEVER say "I clicked" or "I typed" or "screenshot taken" unless you ACTUALLY made a tool call. Lying about actions is FORBIDDEN.
-- Always start by calling computer_use with action='screenshot' FIRST to see the screen before clicking anything.
-- Provide coordinates in REAL screen space ({_sw}x{_sh}). Never guess coordinates without taking a screenshot first.
-- Make exactly ONE tool call at a time. Wait for its result before making the next one.
-- For keyboard shortcuts like Win+E, ALWAYS use action='hotkey' with keys=['win','e']. Never use action='press' for shortcuts."""
+- Normal chat mein computer-control JSON mat output karo.
+- Screen control sirf tab jab COWORK MODE explicitly start ho.
+- Do not claim you clicked, typed, opened, or captured anything unless a tool result proves it."""
+
+    def _sanitize_chat_reply(self, reply: str) -> str:
+        """Keep normal chat natural even if a free model leaks tool JSON."""
+        text = str(reply or "").strip()
+        if not text:
+            return ""
+        text = re.sub(
+            r"```(?:json)?\s*\{\s*\"action\"\s*:\s*\"[^\"]+\"[\s\S]*?\}\s*```",
+            "",
+            text,
+            flags=re.I,
+        ).strip()
+        text = re.sub(
+            r"\s*\{\s*\"action\"\s*:\s*\"(?:screenshot|click|double_click|type|press|hotkey|drag|scroll|wait|done|ask)\"[\s\S]*?\}\s*$",
+            "",
+            text,
+            flags=re.I,
+        ).strip()
+        if not text:
+            return "Haan bhai, main online hoon. Bata kya karna hai?"
+        return text
 
     def chat(self, user_input: str, context: str = "") -> str:
         msg = f"[Context: {context}]\n{user_input}" if context else user_input
@@ -982,7 +1399,7 @@ COMPUTER USE RULES (CRITICAL):
                 resp = self.client.chat.completions.create(
                     model=model, messages=messages, max_tokens=800
                 )
-                reply = resp.choices[0].message.content
+                reply = self._sanitize_chat_reply(resp.choices[0].message.content)
                 self.history.append({"role": "assistant", "content": reply})
                 return reply
             except Exception as e:
@@ -1250,7 +1667,7 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
                 "messages": messages,
                 "max_tokens": 1500 if force_tools else 900
             }
-            if tools and provider != "ollama":
+            if tools and provider != "ollama" and force_tools:
                 # After depth 10, stop sending tools entirely to force a text summary
                 if _depth >= 10:
                     pass  # Don't add tools — model MUST return text
@@ -1270,18 +1687,49 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
             if getattr(message, "tool_calls", None):
                 tool_call = message.tool_calls[0]
                 func_name = tool_call.function.name
-                import json
+                # Normalize common function-name typos from model outputs
+                if func_name in ("computer_us", "computer-use", "computerUse", "computeruse"):
+                    func_name = "computer_use"
+                if not func_name:
+                    func_name = "computer_use"
+                import re as _re
                 try:
                     func_args = json.loads(tool_call.function.arguments)
                 except Exception:
+                    # Fallback: try extracting JSON from the raw arguments text or surrounding message
                     func_args = {}
+                    try:
+                        raw = (tool_call.function.arguments or "")
+                        # Try the dedicated extractor (handles ```json { } ``` and inline objects)
+                        try:
+                            recovered = _extract_json_tool_call(raw)
+                            if recovered:
+                                func_args = recovered
+                        except Exception:
+                            pass
+                        # Try cleaning single quotes and grabbing a JSON object
+                        if not func_args:
+                            cleaned = raw.replace("'", '"')
+                            m = _re.search(r'(\{[\s\S]*\})', cleaned)
+                            if m:
+                                try:
+                                    func_args = json.loads(m.group(1))
+                                except Exception:
+                                    func_args = {}
+                    except Exception:
+                        func_args = {}
                 
+                if not isinstance(func_args, dict):
+                    func_args = {}
                 action_name = func_args.get('action', 'unknown')
                 print(f"\n[JARVIS IS EXECUTING TOOL: {func_name}] (step {_depth + 1})")
                 print(f"  \u2192 action={action_name}  args={json.dumps({k:v for k,v in func_args.items() if k != 'action'})}")
                 db = SessionLocal()
                 try:
                     tool_result = execute_tool(db, func_name, func_args)
+                    # If model produced a slightly-misspelled function name, retry with canonical 'computer_use'
+                    if isinstance(tool_result, str) and tool_result.startswith("Unknown tool") and func_name != "computer_use":
+                        tool_result = execute_tool(db, "computer_use", func_args)
                 finally:
                     db.close()
                 # Log result (truncate screenshots)
@@ -1302,20 +1750,34 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
                         }
                     }]
                 })
-                if tool_result.startswith("[SCREENSHOT DATA BASE64]: "):
-                    b64_url = tool_result.replace("[SCREENSHOT DATA BASE64]: ", "").split("  ...")[0].strip()
+
+                # Normalize screenshot result into an image_url (data or file://)
+                image_url = None
+                if isinstance(tool_result, str):
+                    if tool_result.startswith("[SCREENSHOT DATA BASE64]: "):
+                        image_url = tool_result.replace("[SCREENSHOT DATA BASE64]: ", "").split("  ...")[0].strip()
+                    elif tool_result.startswith("[SCREENSHOT_PATH]: "):
+                        path_url = tool_result.replace("[SCREENSHOT_PATH]: ", "").strip()
+                        try:
+                            image_url = self._image_to_data_url(path_url)
+                        except Exception:
+                            image_url = None
+
+                if image_url:
                     # Get real screen resolution for coordinate guidance
                     try:
                         import pyautogui as _pag
                         _sw, _sh = _pag.size()
                     except Exception:
                         _sw, _sh = 1920, 1080
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": func_name,
                         "content": "Screenshot captured successfully."
                     })
+
                     messages.append({
                         "role": "user",
                         "content": [
@@ -1328,13 +1790,15 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
                                 '{"action": "hotkey", "keys": ["win", "r"]} or '
                                 '{"action": "type", "text": "hello"}'
                             )},
-                            {"type": "image_url", "image_url": {"url": b64_url}}
+                            {"type": "image_url", "image_url": {"url": image_url}}
                         ]
                     })
+
                     # Use VISION model for screenshot analysis
                     vision_models = self._model_candidates(vision=True)
                     return _aibrain_create_completion(self, messages, vision_models, _depth=_depth + 1, force_tools=force_tools)
                 else:
+                    # Non-screenshot tool result: record and optionally ask for verification
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
@@ -1361,6 +1825,7 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
                                 "Do NOT repeat actions already done."
                             )
                         })
+
                 # Recursively call to summarize or continue tool execution
                 return _aibrain_create_completion(self, messages, [model], _depth=_depth + 1, force_tools=force_tools)
 
@@ -1377,10 +1842,24 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
             # output JSON in their text.  Parse it and execute.
             if reply and force_tools and _depth < 10 and tools:
                 extracted = _extract_json_tool_call(reply)
+                # fallback: look for simple action patterns if extractor misses (e.g. '{"action": "screenshot"}...')
+                if not extracted:
+                    try:
+                        import re as _re
+                        m = _re.search(r'\{\s*"action"\s*:\s*"(screenshot|click|type|press|hotkey|drag|wait)"\s*\}', reply, _re.IGNORECASE)
+                        if m:
+                            extracted = {"action": m.group(1).lower()}
+                        else:
+                            # relaxed match (no closing brace or trailing chars)
+                            m2 = _re.search(r'"action"\s*:\s*"(screenshot|click|type|press|hotkey|drag|wait)"', reply, _re.IGNORECASE)
+                            if m2:
+                                extracted = {"action": m2.group(1).lower()}
+                    except Exception:
+                        extracted = None
                 if extracted:
                     action_name = extracted.get("action", "unknown")
                     print(f"\n[JARVIS IS EXECUTING TOOL: computer_use] (step {_depth + 1}) [parsed from text]")
-                    print(f"  → action={action_name}  args={json.dumps({k:v for k,v in extracted.items() if k != 'action'})}")
+                    print(f"  -> action={action_name}  args={json.dumps({k:v for k,v in extracted.items() if k != 'action'})}")
                     db = SessionLocal()
                     try:
                         tool_result = execute_tool(db, "computer_use", extracted)
@@ -1393,23 +1872,57 @@ def _aibrain_create_completion(self, messages: list, models: list[str], _depth: 
 
                     messages.append({"role": "assistant", "content": reply})
 
-                    if tool_result.startswith("[SCREENSHOT DATA BASE64]: "):
-                        b64_url = tool_result.replace("[SCREENSHOT DATA BASE64]: ", "").split("  ...")[0].strip()
+                    # Normalize screenshot result into an image_url (data or file://)
+                    image_url = None
+                    if isinstance(tool_result, str):
+                        if tool_result.startswith("[SCREENSHOT DATA BASE64]: "):
+                            image_url = tool_result.replace("[SCREENSHOT DATA BASE64]: ", "").split("  ...")[0].strip()
+                        elif tool_result.startswith("[SCREENSHOT_PATH]: "):
+                            path_url = tool_result.replace("[SCREENSHOT_PATH]: ", "").strip()
+                            # Convert Windows path to a proper file URI (file:///C:/...)
+                            try:
+                                from pathlib import Path as _Path
+                                image_url = _Path(path_url).resolve().as_uri()
+                            except Exception:
+                                # Avoid backslashes in f-string expressions; build string safely
+                                image_url = "file://" + path_url.replace('\\', '/')
+
+                    try:
+                        import pyautogui as _pag
+                        _sw, _sh = _pag.size()
+                    except Exception:
+                        _sw, _sh = 1920, 1080
+
+                    if image_url:
+                        user_content = [
+                            {"type": "text", "text": (
+                                f"Screenshot captured. Resolution: {_sw}x{_sh}. "
+                                "What is the next action? Output ONLY a JSON object, e.g. "
+                                '{"action": "click", "x": 500, "y": 300}'
+                            )}
+                        ]
                         try:
-                            import pyautogui as _pag
-                            _sw, _sh = _pag.size()
+                            # If image_url is a file URI, convert local file to a data URL for remote model upload
+                            if isinstance(image_url, str) and image_url.startswith("file://"):
+                                from urllib.parse import urlparse, unquote
+                                parsed = urlparse(image_url)
+                                disk_path = unquote(parsed.path)
+                                # On Windows the path may start with a leading slash: /C:/...
+                                if os.name == 'nt' and disk_path.startswith('/') and len(disk_path) > 2 and disk_path[2] == ':':
+                                    disk_path = disk_path.lstrip('/')
+                                try:
+                                    data_url = self._image_to_data_url(disk_path)
+                                    user_content.append({"type": "image_url", "image_url": {"url": data_url}})
+                                except Exception:
+                                    user_content.append({"type": "image_url", "image_url": {"url": image_url}})
+                            else:
+                                user_content.append({"type": "image_url", "image_url": {"url": image_url}})
                         except Exception:
-                            _sw, _sh = 1920, 1080
+                            user_content.append({"type": "image_url", "image_url": {"url": image_url}})
+
                         messages.append({
                             "role": "user",
-                            "content": [
-                                {"type": "text", "text": (
-                                    f"Screenshot captured. Resolution: {_sw}x{_sh}. "
-                                    "What is the next action? Output ONLY a JSON object, e.g. "
-                                    '{"action": "click", "x": 500, "y": 300}'
-                                )},
-                                {"type": "image_url", "image_url": {"url": b64_url}}
-                            ]
+                            "content": user_content
                         })
                         vision_models = self._model_candidates(vision=True)
                         return _aibrain_create_completion(self, messages, vision_models, _depth=_depth + 1, force_tools=force_tools)
@@ -1632,7 +2145,8 @@ def _aibrain_build_file_context(self, file_paths: list[str] | None) -> str:
 
 def _aibrain_chat(self, user_input: str, context: str = "") -> str:
     # Detect if user wants physical computer interaction
-    is_cowork = user_input.strip().lower().startswith("/ai ")
+    lowered_input = user_input.strip().lower()
+    is_cowork = lowered_input.startswith("/cowork ") or lowered_input.startswith("/computer ")
     
     direct_reply = _aibrain_direct_memory_answer(self, user_input)
     if direct_reply and not is_cowork:
@@ -1643,8 +2157,13 @@ def _aibrain_chat(self, user_input: str, context: str = "") -> str:
         return direct_reply
 
     _aibrain_store_memory_facts(self, _aibrain_extract_memory_facts(self, user_input))
-    # Strip /ai prefix for the actual prompt but keep it clean
-    clean_input = user_input[4:].strip() if is_cowork else user_input
+    # Strip command prefixes for the actual prompt but keep the mode explicit.
+    if is_cowork:
+        clean_input = re.sub(r"^/(?:cowork|computer)\s+", "", user_input, flags=re.I).strip()
+    elif lowered_input.startswith("/ai "):
+        clean_input = user_input[4:].strip()
+    else:
+        clean_input = user_input
     prompt = f"[Runtime context]\n{context}\n\n[User request]\n{clean_input}" if context else clean_input
     messages = [{"role": "system", "content": _aibrain_prompt_with_memory(self)}] + self.history
     
@@ -1665,6 +2184,8 @@ def _aibrain_chat(self, user_input: str, context: str = "") -> str:
         messages.append({"role": "user", "content": prompt})
 
     reply = self._create_completion(messages, self._model_candidates(vision=False), force_tools=is_cowork)
+    if not is_cowork and hasattr(self, "_sanitize_chat_reply"):
+        reply = self._sanitize_chat_reply(reply)
     self.history.append({"role": "user", "content": user_input})
     self.history.append({"role": "assistant", "content": reply})
     self._trim_history()
@@ -1683,7 +2204,8 @@ def _aibrain_chat_with_references(
     image_paths = [str(Path(path)) for path in (image_paths or []) if path]
 
     # Detect if user wants physical computer interaction (cowork mode)
-    is_cowork = user_input.strip().lower().startswith("/ai ")
+    lowered_input = user_input.strip().lower()
+    is_cowork = lowered_input.startswith("/cowork ") or lowered_input.startswith("/computer ")
 
     direct_reply = _aibrain_direct_memory_answer(self, user_input)
     if direct_reply and not file_paths and not image_paths and not is_cowork:
@@ -1695,8 +2217,13 @@ def _aibrain_chat_with_references(
 
     _aibrain_store_memory_facts(self, _aibrain_extract_memory_facts(self, user_input))
 
-    # Strip /ai prefix for the actual prompt but keep it clean
-    clean_input = user_input[4:].strip() if is_cowork else user_input
+    # Strip command prefixes for the actual prompt but keep the mode explicit.
+    if is_cowork:
+        clean_input = re.sub(r"^/(?:cowork|computer)\s+", "", user_input, flags=re.I).strip()
+    elif lowered_input.startswith("/ai "):
+        clean_input = user_input[4:].strip()
+    else:
+        clean_input = user_input
 
     prompt_parts = []
     if context:
@@ -1725,6 +2252,11 @@ def _aibrain_chat_with_references(
             "Do NOT describe actions in text. Do NOT claim the task is done without a verification screenshot."
         )})
     elif image_paths:
+        messages.append({"role": "system", "content": (
+            "VISION ANSWER MODE: answer the user's question about the attached image only. "
+            "Do not call tools, do not output action JSON, and do not try to control the computer. "
+            "If the image contains a question, solve it directly from the image."
+        )})
         content = [{"type": "text", "text": text_payload}]
         for image_path in image_paths[:3]:
             try:
@@ -1745,6 +2277,8 @@ def _aibrain_chat_with_references(
         reply = self._create_completion(messages, self._model_candidates(vision=True))
     else:
         reply = self._create_completion(messages, self._model_candidates(vision=False))
+    if not is_cowork and hasattr(self, "_sanitize_chat_reply"):
+        reply = self._sanitize_chat_reply(reply)
 
     ref_notes = []
     if file_paths:
@@ -1845,6 +2379,18 @@ def _aibrain_store_memory_facts(self, facts: list[dict]):
 
 def _aibrain_prompt_with_memory(self) -> str:
     base_prompt = getattr(self, "system_prompt", "") or self._build_prompt()
+    if compact_self_knowledge_text:
+        try:
+            self_text = compact_self_knowledge_text(SELF_KNOWLEDGE_FILE, max_chars=5000)
+        except Exception:
+            self_text = ""
+        if self_text:
+            base_prompt = (
+                base_prompt
+                + "\n\nSelf-knowledge about how JARVIS was made:\n"
+                + self_text
+                + "\nUse this when the user asks who you are, what you can do, how you were built, or what is inside this J.A.R.V.I.S folder."
+            )
     ve = getattr(self, "voice_engine", None)
     if ve is not None:
         mood = str(getattr(ve, "last_voice_mood", "neutral") or "neutral")
@@ -2115,6 +2661,13 @@ class SystemModule:
             return known_paths
 
         home = Path.home().resolve()
+        workspace_home = BASE_DIR
+        for parent in BASE_DIR.parents:
+            if parent.name.upper() == "PRASHANT" and parent.parent.name.lower() == "users":
+                workspace_home = parent.resolve()
+                break
+        if workspace_home != BASE_DIR and workspace_home.exists():
+            home = workspace_home
         onedrive_roots = [
             Path(os.environ.get("OneDriveCommercial", "")).expanduser(),
             Path(os.environ.get("OneDriveConsumer", "")).expanduser(),
@@ -2139,6 +2692,10 @@ class SystemModule:
                         break
             if key in known_paths:
                 continue
+            local_candidate = (home / folder_name).resolve()
+            if local_candidate.exists() or home.name.upper() == "PRASHANT":
+                known_paths[key] = local_candidate
+                continue
             try:
                 result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", f"[Environment]::GetFolderPath('{folder_id}')"],
@@ -2148,9 +2705,12 @@ class SystemModule:
                 )
                 value = (result.stdout or "").strip()
                 if result.returncode == 0 and value:
-                    known_paths[key] = Path(value).expanduser().resolve()
+                    shell_path = Path(value).expanduser().resolve()
+                    if "Default" not in shell_path.parts:
+                        known_paths[key] = shell_path
             except Exception:
                 pass
+            known_paths.setdefault(key, local_candidate)
         return known_paths
 
     def _normalize_windows_known_path(self, path: Path) -> Path:
@@ -2179,6 +2739,13 @@ class SystemModule:
         cleaned = str(raw_path or "").strip().strip('"').strip("'")
         if not cleaned:
             raise ValueError("No path provided.")
+        alias = cleaned.lower().strip(".\\/")
+        if alias in self.known_paths:
+            return self.known_paths[alias].resolve()
+        split_alias = re.split(r"[\\/]+", cleaned, maxsplit=1)
+        if split_alias and split_alias[0].lower() in self.known_paths:
+            tail = split_alias[1] if len(split_alias) > 1 else ""
+            return (self.known_paths[split_alias[0].lower()] / tail).resolve()
         cleaned = cleaned.replace("/", os.sep)
         path = Path(cleaned).expanduser()
         if not path.is_absolute():
@@ -2206,9 +2773,16 @@ class SystemModule:
         if not name:
             return candidate
 
+        workspace_candidate = (BASE_DIR / name).resolve()
+        if workspace_candidate.exists() and self._is_allowed_storage_path(workspace_candidate):
+            return workspace_candidate
+
         try:
             for root, dirs, files in os.walk(self._default_storage_root()):
-                dirs[:] = [d for d in dirs if d not in ("AppData", "node_modules", "__pycache__", ".git")]
+                dirs[:] = [
+                    d for d in dirs
+                    if d not in ("$Recycle.Bin", "AppData", "Windows", "Program Files", "Program Files (x86)", "ProgramData", "node_modules", "__pycache__", ".git")
+                ]
                 for folder in dirs:
                     if folder.lower() == name.lower():
                         found = Path(root) / folder
@@ -2222,6 +2796,109 @@ class SystemModule:
         except Exception:
             pass
         return candidate
+
+    def _telegram_file_search_roots(self) -> list[Path]:
+        roots = []
+        for key in ("downloads", "desktop", "documents", "pictures", "videos", "music"):
+            path = self.known_paths.get(key)
+            if path and path.exists():
+                roots.append(path.resolve())
+        if BASE_DIR.exists():
+            roots.append(BASE_DIR.resolve())
+        for root in self.storage_roots:
+            try:
+                resolved = root.resolve()
+                if resolved.exists():
+                    roots.append(resolved)
+            except Exception:
+                continue
+
+        unique = []
+        seen = set()
+        for root in roots:
+            key = str(root).lower()
+            if key not in seen:
+                unique.append(root)
+                seen.add(key)
+        return unique
+
+    def find_telegram_share_file(self, query: str, limit: int = 6, max_seconds: float = 10.0) -> tuple[Path | None, str | None]:
+        """Resolve a user-provided file path/name into one Telegram-shareable local file."""
+        raw = str(query or "").strip().strip('"').strip("'")
+        if not raw:
+            return None, "Tell me which file to share."
+
+        try:
+            direct = self._resolve_storage_path(raw)
+            if direct.exists():
+                if not self._is_allowed_storage_path(direct):
+                    return None, f"Access denied for {direct}."
+                if direct.is_file():
+                    return direct, None
+                return None, f"Not a file: {direct}"
+        except Exception:
+            pass
+
+        name = Path(raw.replace("\\", "/")).name.strip()
+        if not name:
+            return None, f"File not found: {query}"
+
+        target_lower = name.lower()
+        exact_matches: list[Path] = []
+        partial_matches: list[Path] = []
+        skip_dirs = {
+            "$recycle.bin", "appdata", "windows", "program files", "program files (x86)",
+            "programdata", "node_modules", "__pycache__", ".git", ".venv", "venv",
+            "site-packages", "winsxs", "system volume information",
+        }
+        started = time.time()
+
+        for root in self._telegram_file_search_roots():
+            if time.time() - started > max_seconds:
+                break
+            if not self._is_allowed_storage_path(root):
+                continue
+            try:
+                for dirpath, dirnames, filenames in os.walk(root):
+                    if time.time() - started > max_seconds:
+                        break
+                    dirnames[:] = [d for d in dirnames if d.lower() not in skip_dirs and not d.startswith(".")]
+                    for file_name in filenames:
+                        file_lower = file_name.lower()
+                        if file_lower == target_lower or target_lower in file_lower:
+                            found = (Path(dirpath) / file_name).resolve()
+                            if not self._is_allowed_storage_path(found):
+                                continue
+                            if file_lower == target_lower:
+                                exact_matches.append(found)
+                            else:
+                                partial_matches.append(found)
+                            if len(exact_matches) >= limit:
+                                break
+                    if len(exact_matches) >= limit:
+                        break
+            except Exception:
+                continue
+
+        unique_matches = []
+        seen_matches = set()
+        for match in exact_matches or partial_matches:
+            key = str(match).lower()
+            if key not in seen_matches:
+                unique_matches.append(match)
+                seen_matches.add(key)
+
+        matches = unique_matches
+        if not matches:
+            return None, f"File not found: {query}"
+        if len(matches) == 1:
+            return matches[0], None
+
+        choices = "\n".join(f"{idx + 1}. {path}" for idx, path in enumerate(matches[:limit]))
+        return None, (
+            "Multiple matching files mile. Exact path ke saath dobara bhejo:\n"
+            f"{choices}"
+        )
 
     def _run_powershell_json(self, script: str, timeout: int = 6):
         try:
@@ -2421,7 +3098,7 @@ class SystemModule:
         if not psutil:
             return {"available": False, "error": "psutil not installed."}
         try:
-            cpu = psutil.cpu_percent(interval=None)
+            cpu = psutil.cpu_percent(interval=0.6)
             ram = psutil.virtual_memory()
             disk_root = Path.home().anchor or "/"
             disk = psutil.disk_usage(disk_root)
@@ -2456,6 +3133,15 @@ class SystemModule:
                     f"Disk {du:.0f}/{dt:.0f} GB ({disk.percent}%), Battery: {bat_s}.")
         except Exception as e:
             return f"Hardware check error: {e}"
+
+    def disk_cleanup_report(self) -> str:
+        if build_disk_cleanup_report:
+            try:
+                extra_roots = [Path.cwd(), Path.cwd() / "web" / "assets"]
+                return build_disk_cleanup_report(Path.home(), extra_roots)
+            except Exception as e:
+                return f"Disk cleanup report error: {e}"
+        return "Disk cleanup report helper is unavailable."
 
     def network_info(self) -> str:
         try:
@@ -2640,6 +3326,34 @@ class SystemModule:
                 except:
                     return f"Failed to open {key}."
 
+        # Browser + website multi-step, e.g. "Chrome open karo aur YouTube kholo".
+        browser_key = None
+        for candidate in ("google chrome", "chrome", "microsoft edge", "edge", "firefox"):
+            if candidate in n:
+                browser_key = candidate
+                break
+        website_key = None
+        website_url = None
+        for key, url in WEB_MAP.items():
+            if key in n:
+                website_key, website_url = key, url
+                break
+        if browser_key and website_url:
+            try:
+                if self.os_type == "Windows":
+                    launcher = "chrome" if "chrome" in browser_key else ("msedge" if "edge" in browser_key else "firefox")
+                    subprocess.Popen(f'start {launcher} "{website_url}"', shell=True)
+                elif self.os_type == "Darwin":
+                    app = "Google Chrome" if "chrome" in browser_key else ("Microsoft Edge" if "edge" in browser_key else "Firefox")
+                    subprocess.Popen(["open", "-a", app, website_url])
+                else:
+                    launcher = "google-chrome" if "chrome" in browser_key else ("microsoft-edge" if "edge" in browser_key else "firefox")
+                    subprocess.Popen([launcher, website_url])
+                return f"Opening {browser_key} with {website_key}."
+            except Exception:
+                webbrowser.open(website_url)
+                return f"Opening {website_key} in your browser."
+
         # Web shortcuts
         for key, url in WEB_MAP.items():
             if key in n:
@@ -2786,6 +3500,46 @@ class SystemModule:
             return f"Opening {target}."
         except Exception as e:
             return f"Cannot open file: {e}"
+
+    def open_desktop_folder(self) -> str:
+        try:
+            desktop = Path.home() / "Desktop"
+            if not desktop.exists():
+                desktop = Path.home()
+            if self.os_type == "Windows":
+                subprocess.Popen(["explorer.exe", str(desktop)])
+            elif self.os_type == "Darwin":
+                subprocess.Popen(["open", str(desktop)])
+            else:
+                subprocess.Popen(["xdg-open", str(desktop)])
+            return f"Opening desktop folder in file explorer: {desktop}."
+        except Exception as e:
+            return f"Cannot open desktop folder: {e}"
+
+    def edit_file(self, path: str) -> str:
+        try:
+            target = self._find_existing_path(path)
+            if target is None or not target.exists():
+                return f"I could not find '{path}' inside your allowed storage roots."
+            if not target.is_file():
+                return f"{target} is not a file I can edit directly."
+            if not self._is_allowed_storage_path(target):
+                return f"Access denied for {target}."
+
+            if self.os_type == "Windows":
+                editor = shutil.which("code")
+                if editor:
+                    subprocess.Popen([editor, str(target)])
+                else:
+                    subprocess.Popen(["notepad.exe", str(target)])
+            elif self.os_type == "Darwin":
+                subprocess.Popen(["open", "-t", str(target)])
+            else:
+                editor = os.environ.get("EDITOR") or shutil.which("xdg-open") or "nano"
+                subprocess.Popen([editor, str(target)])
+            return f"Opening {target} for editing."
+        except Exception as e:
+            return f"Cannot edit file: {e}"
 
     def create_folder(self, path: str) -> str:
         try:
@@ -2973,15 +3727,9 @@ class SystemModule:
     def download_file_telegram(self, file_path: str) -> tuple:
         """Prepare file for Telegram download. Returns (file_path, caption) or (None, error_msg)."""
         try:
-            target = self._find_existing_path(file_path)
-            if target is None or not target.exists():
-                return None, f"File not found: {file_path}"
-
-            if not self._is_allowed_storage_path(target):
-                return None, f"Access denied for {target}."
-
-            if not target.is_file():
-                return None, f"Not a file: {target}"
+            target, message = self.find_telegram_share_file(file_path)
+            if target is None:
+                return None, message or f"File not found: {file_path}"
 
             # Check file size (Telegram limit is 50MB for bots)
             size = target.stat().st_size
@@ -3098,6 +3846,9 @@ SystemModule.open_hp_thermal_controls = _system_open_hp_thermal_controls
 #  EMAIL MODULE
 # ═══════════════════════════════════════════════════════════════
 class EmailModule:
+    EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}$")
+    REPEATED_PUBLIC_SUFFIXES = {"com", "net", "org", "in", "edu", "gov", "co"}
+
     def __init__(self, cfg: dict):
         self.email    = cfg.get("email","")
         self.password = cfg.get("email_password","")
@@ -3105,6 +3856,23 @@ class EmailModule:
         self.smtp     = cfg.get("smtp_server","smtp.gmail.com")
         self.port     = cfg.get("smtp_port", 587)
         self.enabled  = bool(self.email and self.password)
+
+    @classmethod
+    def normalize_recipient(cls, value: str) -> str:
+        raw = str(value or "").strip().strip("<>(),;:[]{}\"'")
+        match = re.search(r"[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}", raw)
+        email = match.group(0).lower() if match else raw.lower()
+        if not cls.EMAIL_RE.fullmatch(email):
+            return ""
+        local, domain = email.rsplit("@", 1)
+        labels = domain.split(".")
+        if any(not label or label.startswith("-") or label.endswith("-") for label in labels):
+            return ""
+        if len(labels) >= 2 and labels[-1] == labels[-2] and labels[-1] in cls.REPEATED_PUBLIC_SUFFIXES:
+            return ""
+        if ".." in local or local.startswith(".") or local.endswith("."):
+            return ""
+        return email
 
     def _decode(self, h) -> str:
         parts  = decode_header(h or "")
@@ -3144,6 +3912,9 @@ class EmailModule:
     def send_email(self, to: str, subject: str, body: str) -> str:
         if not self.enabled:
             return "Email not configured."
+        to = self.normalize_recipient(to)
+        if not to:
+            return "Invalid email address. Please check recipient email and try again."
         try:
             msg              = MIMEMultipart()
             msg["From"]      = self.email
@@ -3158,6 +3929,96 @@ class EmailModule:
             return f"Email sent to {to}."
         except Exception as e:
             return f"Send failed: {e}"
+
+    def send_email_with_attachment(self, to: str, subject: str, body: str, file_path: str) -> str:
+        if not self.enabled:
+            return "Email not configured."
+        to = self.normalize_recipient(to)
+        if not to:
+            return "Invalid email address. Please check recipient email and try again."
+        target = Path(file_path)
+        if not target.is_file():
+            return f"Attachment not found: {target}"
+        try:
+            msg = MIMEMultipart()
+            msg["From"] = self.email
+            msg["To"] = to
+            msg["Subject"] = subject
+            msg.attach(MIMEText(body, "plain"))
+
+            part = MIMEBase("application", "octet-stream")
+            with open(target, "rb") as f:
+                part.set_payload(f.read())
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f'attachment; filename="{target.name}"')
+            msg.attach(part)
+
+            srv = smtplib.SMTP(self.smtp, self.port)
+            srv.starttls()
+            srv.login(self.email, self.password)
+            srv.send_message(msg)
+            srv.quit()
+            return f"Email sent to {to} with {target.name}."
+        except Exception as e:
+            return f"Attachment send failed: {e}"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DOCUMENT MODULE
+# ═══════════════════════════════════════════════════════════════
+class DocumentModule:
+    def __init__(self, output_dir: str | Path = GENERATED_DIR):
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _safe_filename(self, value: str, suffix: str = ".docx") -> str:
+        stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(value or "document")).strip("._")
+        stem = stem[:70] or "document"
+        if not stem.lower().endswith(suffix):
+            stem += suffix
+        return stem
+
+    def create_docx(self, title: str, content: str, output_name: str = None) -> str:
+        try:
+            from docx import Document
+        except Exception:
+            return "python-docx is not installed. Run: pip install python-docx"
+
+        title = re.sub(r"\s+", " ", str(title or "JARVIS Document")).strip()
+        content = str(content or "").strip()
+        if not content:
+            return "Document content is empty."
+
+        filename = self._safe_filename(output_name or title)
+        path = self.output_dir / filename
+        if path.exists():
+            stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            path = self.output_dir / self._safe_filename(f"{Path(filename).stem}_{stamp}")
+
+        doc = Document()
+        doc.add_heading(title, level=0)
+        for block in re.split(r"\n{2,}", content):
+            block = block.strip()
+            if not block:
+                continue
+            if block.startswith("#"):
+                heading = block.lstrip("#").strip()
+                if heading:
+                    doc.add_heading(heading, level=1)
+                continue
+            for line in block.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if re.match(r"^[-*]\s+", line):
+                    doc.add_paragraph(re.sub(r"^[-*]\s+", "", line), style="List Bullet")
+                elif re.match(r"^\d+[.)]\s+", line):
+                    doc.add_paragraph(re.sub(r"^\d+[.)]\s+", "", line), style="List Number")
+                else:
+                    doc.add_paragraph(line)
+        doc.save(path)
+        return str(path)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  WHATSAPP MODULE (pywhatkit)
@@ -3181,6 +4042,19 @@ class WhatsAppModule:
             p = p.lstrip("0")
         return default_cc + p
 
+    def _login_status_hint(self) -> str:
+        if not pyautogui or not pytesseract:
+            return " WhatsApp Web opened; agar QR login screen dikhe to pehle phone se scan karke login karna hoga."
+        try:
+            time.sleep(2)
+            shot = pyautogui.screenshot()
+            text = pytesseract.image_to_string(shot).lower()
+            if any(marker in text for marker in ("scan to log in", "qr code", "link a device", "download whatsapp")):
+                return " WhatsApp Web QR/login screen par hai, isliye message send confirm nahi hua. Phone se QR scan karke dobara try karo."
+        except Exception:
+            return " WhatsApp Web opened; agar QR login screen dikhe to pehle phone se scan karke login karna hoga."
+        return " WhatsApp Web logged-in lag raha hai; message send verify kar lena."
+
     def send_message(self, phone: str, message: str) -> str:
         if not self.enabled:
             return "WhatsApp messaging is not available. Install pywhatkit: pip install pywhatkit"
@@ -3200,7 +4074,7 @@ class WhatsAppModule:
                 tab_close=True,
                 close_time=3,
             )
-            return f"WhatsApp message queued to {phone_n}."
+            return f"WhatsApp message queued/opened for {phone_n}.{self._login_status_hint()}"
         except Exception as e:
             return f"WhatsApp send failed: {e}"
 
@@ -3569,6 +4443,45 @@ class OwnerFaceRecognizer:
             return "NO_FACE"
         return "OWNER" if best <= self.tolerance else "STRANGER"
 
+    def verify_image_file(self, image_path: str) -> tuple[str, float | None, str]:
+        """
+        Verify the largest face in an image against the enrolled owner profile.
+        Returns (label, distance, message) where label is OWNER, STRANGER,
+        NO_FACE, or NO_PROFILE. This never identifies arbitrary people.
+        """
+        if not self.enabled:
+            return "NO_PROFILE", None, "Owner face verification disabled."
+        fr = ensure_face_recognition()
+        if not fr:
+            self._load_error = "face_recognition not installed. pip install face_recognition"
+            return "NO_PROFILE", None, self._load_error
+        self._ensure_loaded()
+        if not self._encodings:
+            return "NO_PROFILE", None, self._load_error or "Owner face profile is not ready."
+        try:
+            import numpy as np
+
+            img = fr.load_image_file(str(image_path))
+            locs = fr.face_locations(img, model="hog")
+            if not locs:
+                return "NO_FACE", None, "Image me clear face detect nahi hua."
+            encs = fr.face_encodings(img, known_face_locations=locs, num_jitters=1)
+            if not encs:
+                return "NO_FACE", None, "Image me face encoding create nahi ho paya."
+
+            def _area(loc):
+                top, right, bottom, left = loc
+                return max(0, right - left) * max(0, bottom - top)
+
+            primary_idx = max(range(len(locs)), key=lambda idx: _area(locs[idx]))
+            dists = fr.face_distance(self._encodings, encs[primary_idx])
+            best = float(np.min(dists)) if len(dists) else 1.0
+            if best <= self.tolerance:
+                return "OWNER", best, f"Owner face profile se match mil raha hai. Distance {best:.3f}, tolerance {self.tolerance:.3f}."
+            return "STRANGER", best, f"Owner face profile se match nahi mila. Distance {best:.3f}, tolerance {self.tolerance:.3f}."
+        except Exception as e:
+            return "NO_FACE", None, f"Owner face verification failed: {e}"
+
 
 # ═══════════════════════════════════════════════════════════════
 #  WEATHER MODULE
@@ -3762,6 +4675,551 @@ class LocationModule:
     def open_in_browser(self):
         webbrowser.open(self.get_map_url())
 
+
+# ═══════════════════════════════════════════════════════════════
+#  BROWSER CONTROL MODULE
+# ═══════════════════════════════════════════════════════════════
+class BrowserControlModule:
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self._jobs = queue.Queue()
+        self._worker = None
+        self._worker_lock = threading.Lock()
+        self._last_error = ""
+
+    def _normalize_url(self, target: str) -> str:
+        target = str(target or "").strip()
+        if not target:
+            return "https://www.google.com"
+        if re.match(r"^https?://", target, re.I):
+            return target
+        if "." in target and " " not in target:
+            return "https://" + target
+        if requests:
+            return "https://www.google.com/search?q=" + requests.utils.quote(target)
+        return "https://www.google.com/search?q=" + target.replace(" ", "+")
+
+    def _ensure_worker(self):
+        with self._worker_lock:
+            if self._worker and self._worker.is_alive():
+                return
+            self._worker = threading.Thread(target=self._worker_loop, daemon=True)
+            self._worker.start()
+
+    def _dispatch(self, action: str, payload: str = "", timeout: int = 45) -> str:
+        self._ensure_worker()
+        reply_q = queue.Queue(maxsize=1)
+        self._jobs.put((action, payload, reply_q))
+        try:
+            return reply_q.get(timeout=timeout)
+        except queue.Empty:
+            return "Browser control timed out."
+
+    def _worker_loop(self):
+        try:
+            from playwright.sync_api import sync_playwright
+        except Exception:
+            self._last_error = "Playwright is not installed. Run: pip install playwright"
+            while True:
+                _action, _payload, reply_q = self._jobs.get()
+                reply_q.put(self._last_error)
+
+        def click_visible_text(page, label: str) -> str:
+            try:
+                page.get_by_text(label, exact=False).first.click(timeout=2500)
+                return f"Clicked browser text: {label}"
+            except Exception:
+                pass
+
+            try:
+                import re as _re
+
+                for role in ("button", "link", "textbox", "menuitem"):
+                    try:
+                        page.get_by_role(role, name=_re.compile(_re.escape(label), _re.I)).first.click(timeout=1800)
+                        return f"Clicked browser {role}: {label}"
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            selector = "a,button,[role=button],[role=link],[onclick],input[type=button],input[type=submit],summary"
+            candidates = page.evaluate(
+                """
+                (selector) => Array.from(document.querySelectorAll(selector)).map((el, index) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    const text = (el.innerText || el.value || el.getAttribute('aria-label') || el.title || '').trim();
+                    return {
+                        index,
+                        text,
+                        visible: !!text && rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+                    };
+                }).filter(item => item.visible)
+                """,
+                selector,
+            )
+            if best_text_match:
+                match = best_text_match(label, candidates)
+            else:
+                match = next((item for item in candidates if label.lower() in item.get("text", "").lower()), None)
+            if not match:
+                visible = ", ".join(item.get("text", "")[:40] for item in candidates[:8])
+                return f"I could not find a clickable browser item like '{label}'. Visible options: {visible or 'none'}."
+            page.locator(selector).nth(int(match["index"])).click(timeout=5000)
+            matched_text = str(match.get("text") or label).strip()
+            return f"Clicked browser text: {matched_text} (matched from '{label}')"
+
+        try:
+            pw = sync_playwright().start()
+            try:
+                browser = pw.chromium.launch(channel="chrome", headless=False)
+            except Exception:
+                browser = pw.chromium.launch(headless=False)
+            page = browser.new_page()
+            last_url = "about:blank"
+        except Exception as e:
+            self._last_error = (
+                "Browser control is not ready. If this is the first setup, run: "
+                "python -m playwright install chromium. Details: " + str(e)
+            )
+            while True:
+                _action, _payload, reply_q = self._jobs.get()
+                reply_q.put(self._last_error)
+
+        def new_browser_page(restore: bool = True):
+            nonlocal browser, page, last_url
+            try:
+                browser.close()
+            except Exception:
+                pass
+            try:
+                browser = pw.chromium.launch(channel="chrome", headless=False)
+            except Exception:
+                browser = pw.chromium.launch(headless=False)
+            page = browser.new_page()
+            if restore and last_url and last_url != "about:blank":
+                try:
+                    page.goto(last_url, wait_until="domcontentloaded", timeout=25000)
+                except Exception:
+                    pass
+            return page
+
+        def ensure_live_page():
+            nonlocal page
+            try:
+                if page and not page.is_closed():
+                    _ = page.url
+                    return page
+            except Exception:
+                pass
+            return new_browser_page(restore=True)
+
+        while True:
+            action, payload, reply_q = self._jobs.get()
+            try:
+                page = ensure_live_page()
+
+                if action == "open":
+                    url = self._normalize_url(payload)
+                    page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                    last_url = page.url
+                    reply_q.put(f"Browser opened: {page.title() or url}")
+                elif action == "read":
+                    title = page.title()
+                    url = page.url
+                    text = page.locator("body").inner_text(timeout=7000)
+                    text = re.sub(r"\s+", " ", text).strip()
+                    reply_q.put(f"Browser page: {title} | {url}. Text: {text[:1400]}")
+                elif action == "click":
+                    label = str(payload or "").strip()
+                    if not label:
+                        reply_q.put("Tell me which visible text to click.")
+                    else:
+                        result = click_visible_text(page, label)
+                        try:
+                            last_url = page.url
+                        except Exception:
+                            pass
+                        reply_q.put(result)
+                elif action == "type":
+                    text = str(payload or "")
+                    if not text:
+                        reply_q.put("Tell me what to type in the browser.")
+                    else:
+                        focused = page.locator(":focus")
+                        if focused.count():
+                            focused.fill(text, timeout=3000)
+                        else:
+                            page.keyboard.type(text)
+                        reply_q.put("Typed into the browser.")
+                elif action == "screenshot":
+                    fname = f"browser_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                    path = str(Path.home() / "Pictures" / fname)
+                    Path(path).parent.mkdir(parents=True, exist_ok=True)
+                    page.screenshot(path=path, full_page=True)
+                    reply_q.put(f"Browser screenshot saved: {path}")
+                else:
+                    reply_q.put("Unknown browser action.")
+            except Exception as e:
+                reply_q.put(f"Browser {action} failed: {e}")
+
+    def open(self, target: str) -> str:
+        return self._dispatch("open", target)
+
+    def search(self, query: str) -> str:
+        return self.open(query)
+
+    def read_page(self) -> str:
+        return self._dispatch("read")
+
+    def click_text(self, label: str) -> str:
+        return self._dispatch("click", label)
+
+    def type_text(self, text: str) -> str:
+        return self._dispatch("type", text)
+
+    def screenshot(self) -> str:
+        return self._dispatch("screenshot")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  AUTONOMOUS VISION + ACTION AGENT
+# ═══════════════════════════════════════════════════════════════
+class VisionActionAgent:
+    SAFE_ACTIONS = {"click", "double_click", "type", "press", "hotkey", "scroll", "wait", "done", "ask"}
+    DANGEROUS_WORDS = (
+        "delete", "remove", "format", "reset", "shutdown", "restart", "payment",
+        "purchase", "buy", "send money", "transfer", "password", "otp", "2fa",
+        "email send", "whatsapp send", "submit", "confirm order",
+    )
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+        self.model = str(cfg.get("gemini_vision_model", "gemini-2.0-flash") or "gemini-2.0-flash")
+        self.max_steps = int(cfg.get("agent_max_steps", 12) or 12)
+        self.request_timeout = max(15, min(120, int(cfg.get("gemini_request_timeout", 60) or 60)))
+        self.max_model_attempts = max(1, min(5, int(cfg.get("gemini_max_model_attempts", 2) or 2)))
+        self.last_screenshot = None
+
+    def _api_key(self) -> str:
+        return (
+            os.getenv("GEMINI_API_KEY", "").strip()
+            or os.getenv("GOOGLE_API_KEY", "").strip()
+            or str(self.cfg.get("gemini_api_key", "")).strip()
+        )
+
+    def _screen_size(self) -> tuple[int, int]:
+        if pyautogui:
+            try:
+                size = pyautogui.size()
+                return int(size.width), int(size.height)
+            except Exception:
+                pass
+        return 1920, 1080
+
+    def _capture_screen(self) -> tuple[str | None, str | None]:
+        if not PIL_Image:
+            return None, "Pillow is not installed. Run: pip install pillow"
+        try:
+            fname = f"agent_screen_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
+            path = Path.home() / "Pictures" / fname
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if mss_mod:
+                with mss_mod.mss() as sct:
+                    shot = sct.grab(sct.monitors[0])
+                    img = PIL_Image.frombytes("RGB", shot.size, shot.rgb)
+                    img.save(path)
+            elif pyautogui:
+                pyautogui.screenshot(str(path))
+            else:
+                return None, "Screen capture needs mss or pyautogui. Run: pip install mss pyautogui"
+            self.last_screenshot = str(path)
+            return str(path), None
+        except Exception as e:
+            return None, f"Screen capture failed: {e}"
+
+    def _image_b64(self, path: str) -> str:
+        with open(path, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+
+    def _extract_json(self, text: str) -> dict:
+        text = str(text or "").strip()
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+        match = re.search(r"\{[\s\S]*\}", text)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except Exception:
+                pass
+        return {"action": "ask", "message": "Vision model did not return valid JSON.", "raw": text[:500]}
+
+    def _think(self, goal: str, screenshot_path: str, step: int, history: list[str]) -> dict:
+        if not requests:
+            return {"action": "ask", "message": "requests is not installed."}
+        key = self._api_key()
+        if not key:
+            return {
+                "action": "ask",
+                "message": "Gemini API key missing. Add gemini_api_key to jarvis_config.json or set GEMINI_API_KEY.",
+            }
+        width, height = self._screen_size()
+        prompt = (
+            "You are the autonomous screen-control brain for J.A.R.V.I.S.\n"
+            "Look at the screenshot and choose exactly ONE next action to complete the user's goal.\n"
+            "Return ONLY valid JSON, no markdown.\n"
+            f"Screen size: {width}x{height}. Step: {step}. Goal: {goal}\n"
+            "Allowed actions:\n"
+            "{\"action\":\"click\",\"x\":100,\"y\":200,\"reason\":\"...\"}\n"
+            "{\"action\":\"double_click\",\"x\":100,\"y\":200,\"reason\":\"...\"}\n"
+            "{\"action\":\"type\",\"text\":\"text to type\",\"reason\":\"...\"}\n"
+            "{\"action\":\"press\",\"key\":\"enter\",\"reason\":\"...\"}\n"
+            "{\"action\":\"hotkey\",\"keys\":[\"ctrl\",\"l\"],\"reason\":\"...\"}\n"
+            "{\"action\":\"scroll\",\"amount\":-5,\"reason\":\"...\"}\n"
+            "{\"action\":\"wait\",\"seconds\":2,\"reason\":\"...\"}\n"
+            "{\"action\":\"done\",\"message\":\"brief completion summary\"}\n"
+            "{\"action\":\"ask\",\"message\":\"question or safety confirmation needed\"}\n"
+            "Rules: do not make purchases, delete files, send messages, submit forms, reveal passwords, or confirm irreversible actions. "
+            "If such a step is needed, return ask. Use precise coordinates from the screenshot. "
+            "Return done ONLY when the current screenshot visibly proves the goal is complete. "
+            "Never return done with speculative wording like should have, would have, likely, after typing, or therefore. "
+            "Recent history:\n" + "\n".join(history[-6:])
+        )
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": "image/png", "data": self._image_b64(screenshot_path)}},
+                ]
+            }],
+            "generationConfig": {
+                "temperature": 0.15,
+                "maxOutputTokens": 512,
+                "responseMimeType": "application/json",
+            },
+        }
+        candidate_models = []
+        for model_name in (
+            self.model,
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-3-flash-preview",
+        ):
+            model_name = str(model_name or "").strip()
+            if model_name and model_name not in candidate_models:
+                candidate_models.append(model_name)
+            if len(candidate_models) >= self.max_model_attempts:
+                break
+
+        errors = []
+        for model_name in candidate_models:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                resp = requests.post(url, json=payload, timeout=self.request_timeout)
+                if resp.status_code >= 400:
+                    detail = self._gemini_error_summary(resp)
+                    errors.append(f"{model_name}: {detail}")
+                    if resp.status_code in {400, 401, 403}:
+                        break
+                    continue
+                self.model = model_name
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                return self._extract_json(text)
+            except Exception as e:
+                errors.append(f"{model_name}: {type(e).__name__}: {e}")
+                continue
+        return {
+            "action": "ask",
+            "message": "Gemini vision request failed for configured models. " + " | ".join(errors)[:1800],
+        }
+
+    def _read_only_goal(self, goal: str) -> bool:
+        lower = str(goal or "").lower()
+        read_markers = (
+            "read the current screen",
+            "tell me what is wrong",
+            "what is wrong",
+            "describe the screen",
+            "explain the screen",
+            "what do you see",
+            "analyze the screen",
+        )
+        return any(marker in lower for marker in read_markers)
+
+    def _describe_screen(self, goal: str, screenshot_path: str) -> str:
+        if not requests:
+            return "requests is not installed."
+        key = self._api_key()
+        if not key:
+            return "Gemini API key missing. Add gemini_api_key to jarvis_config.json or set GEMINI_API_KEY."
+        prompt = (
+            "You are J.A.R.V.I.S. screen diagnosis mode. "
+            "Analyze the screenshot and answer the user's question directly. "
+            "Do not return action JSON. Do not click or automate anything. "
+            "Be concise and mention visible errors, likely cause, and next fix.\n"
+            f"User question: {goal}"
+        )
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": "image/png", "data": self._image_b64(screenshot_path)}},
+                ]
+            }],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 700,
+            },
+        }
+        errors = []
+        for model_name in (
+            self.model,
+            "gemini-2.0-flash",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-3-flash-preview",
+        ):
+            model_name = str(model_name or "").strip()
+            if not model_name:
+                continue
+            if len(errors) >= self.max_model_attempts:
+                break
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+                resp = requests.post(url, json=payload, timeout=self.request_timeout)
+                if resp.status_code >= 400:
+                    errors.append(f"{model_name}: {self._gemini_error_summary(resp)}")
+                    if resp.status_code in {400, 401, 403}:
+                        break
+                    continue
+                self.model = model_name
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                text = str(text or "").strip()
+                return text or "Gemini returned an empty screen analysis."
+            except Exception as e:
+                errors.append(f"{model_name}: {e}")
+        return "Gemini screen analysis failed. " + " | ".join(errors)[:1800]
+
+    def _gemini_error_summary(self, resp) -> str:
+        try:
+            data = resp.json()
+            error = data.get("error", {}) if isinstance(data, dict) else {}
+            message = str(error.get("message", "") or "").replace(self._api_key(), "[API_KEY]")
+            details = error.get("details", [])
+            detail_bits = []
+            if isinstance(details, list):
+                for item in details[:3]:
+                    if not isinstance(item, dict):
+                        continue
+                    reason = item.get("reason") or item.get("@type", "")
+                    violations = item.get("violations") or item.get("quotaMetric") or item.get("quotaId")
+                    if violations:
+                        detail_bits.append(f"{reason}: {violations}")
+                    elif reason:
+                        detail_bits.append(str(reason))
+            suffix = f" Details: {'; '.join(detail_bits)}" if detail_bits else ""
+            return f"HTTP {resp.status_code} {error.get('status', '')}: {message[:900]}{suffix}"
+        except Exception:
+            text = str(getattr(resp, "text", "") or "").replace(self._api_key(), "[API_KEY]")
+            return f"HTTP {resp.status_code}: {text[:900]}"
+
+    def _dangerous_goal(self, goal: str) -> bool:
+        lower = str(goal or "").lower()
+        return any(word in lower for word in self.DANGEROUS_WORDS)
+
+    def _act(self, decision: dict) -> str:
+        if not pyautogui:
+            return "pyautogui is not installed. Run: pip install pyautogui"
+        action = str(decision.get("action", "")).strip().lower()
+        if action not in self.SAFE_ACTIONS:
+            return f"Blocked unknown action: {action}"
+        try:
+            if action == "click":
+                pyautogui.click(int(decision["x"]), int(decision["y"]))
+                return f"clicked {decision.get('x')},{decision.get('y')}"
+            if action == "double_click":
+                pyautogui.doubleClick(int(decision["x"]), int(decision["y"]))
+                return f"double clicked {decision.get('x')},{decision.get('y')}"
+            if action == "type":
+                pyautogui.write(str(decision.get("text", "")), interval=0.01)
+                return "typed text"
+            if action == "press":
+                pyautogui.press(str(decision.get("key", "enter")))
+                return f"pressed {decision.get('key', 'enter')}"
+            if action == "hotkey":
+                keys = decision.get("keys", [])
+                if not isinstance(keys, list) or not keys:
+                    return "hotkey missing keys"
+                pyautogui.hotkey(*[str(k) for k in keys])
+                return "pressed hotkey " + "+".join(str(k) for k in keys)
+            if action == "scroll":
+                pyautogui.scroll(int(decision.get("amount", -5)))
+                return f"scrolled {decision.get('amount', -5)}"
+            if action == "wait":
+                seconds = max(0.2, min(8.0, float(decision.get("seconds", 1))))
+                time.sleep(seconds)
+                return f"waited {seconds:.1f}s"
+            if action == "done":
+                return "done"
+            if action == "ask":
+                return "ask"
+        except Exception as e:
+            return f"action failed: {e}"
+        return "no action"
+
+    def run(self, goal: str, max_steps: int | None = None) -> str:
+        goal = str(goal or "").strip()
+        if not goal:
+            return "Tell me the automation goal after /agent."
+        if self._dangerous_goal(goal):
+            return "I need explicit confirmation before automating a risky task. Rephrase with /agent confirm if you want to proceed."
+
+        steps = max(1, min(int(max_steps or self.max_steps), 20))
+        if self._read_only_goal(goal):
+            screenshot, err = self._capture_screen()
+            if err:
+                return err
+            return self._describe_screen(goal, screenshot)
+
+        history = []
+        for step in range(1, steps + 1):
+            screenshot, err = self._capture_screen()
+            if err:
+                return err
+            decision = self._think(goal, screenshot, step, history)
+            action = str(decision.get("action", "")).strip().lower()
+            reason = str(decision.get("reason") or decision.get("message") or "")
+            history.append(f"step {step}: decision={decision}")
+            if action == "done":
+                done_message = str(decision.get("message") or "")
+                if re.search(r"\b(should have|would have|likely|probably|after typing|therefore|the user's goal was)\b", done_message, re.I):
+                    return "Automation not completed: the vision model tried to guess instead of verifying the result on screen."
+                return done_message or f"Automation complete in {step} steps."
+            if action == "ask":
+                return decision.get("message") or "Automation paused for confirmation."
+            result = self._act(decision)
+            history.append(f"step {step}: result={result}")
+            if "failed" in result.lower() or result.startswith("Blocked"):
+                return f"Automation stopped at step {step}: {result}. Last decision: {decision}"
+            time.sleep(0.6)
+        return "Automation step limit reached. Last actions: " + " | ".join(history[-4:])
+
 # ═══════════════════════════════════════════════════════════════
 #  NOTES MODULE
 # ═══════════════════════════════════════════════════════════════
@@ -3870,10 +5328,10 @@ class Intent:
         "add_event":      ["add event","schedule","book meeting","create event"],
         "open_calendar":  ["open calendar","google calendar","show calendar"],
         "weather":        ["weather","temperature","raining","forecast","sunny","hot outside"],
-        "note_add":       ["take a note","note that","write down","remember this","jot"],
-        "note_read":      ["read notes","my notes","show notes","what notes"],
+        "note_add":       ["take a note","note that","write down","remember this","jot","note bnao","note banao","note bna","note bana"],
+        "note_read":      ["read notes","notes read","my notes","mere notes","show notes","what notes"],
         "note_clear":     ["clear notes","delete notes"],
-        "reminder":       ["remind me","set reminder","reminder in","alert me"],
+        "reminder":       ["remind me","set reminder","reminder in","reminder do","reminder dedo","yaad dilao","alert me"],
         "news":           ["news","headlines","what's happening","latest news"],
         "time":           ["what time","current time","the time"],
         "date":           ["what date","today's date","what day","what's today's date","what's today"],
@@ -3893,6 +5351,8 @@ class Intent:
         "shutdown":       ["shutdown","shut down","power off","turn off computer"],
         "restart":        ["restart","reboot"],
         "lock":           ["lock","lock screen","lock computer"],
+        "self_improvement": ["edit yourself", "modify yourself", "upgrade yourself", "improve yourself", "add feature to yourself", "add a feature to jarvis", "change your code", "self edit", "self-edit", "self improve", "self-improve"],
+        "self_knowledge":  ["read whole j.a.r.v.i.s folder", "read whole jarvis folder", "scan yourself", "learn yourself", "learn how you were made", "know how you were made", "how were you made", "what are you made of", "self knowledge", "self-knowledge"],
         "clear_chat":     ["clear chat","reset","forget conversation","new conversation"],
         "joke":           ["joke","make me laugh","say something funny"],
         "greet":          ["hello jarvis","hi jarvis","hey jarvis","good morning","good evening","good afternoon","good night"],
@@ -3903,7 +5363,7 @@ class Intent:
     FORCE_LOCAL_INTENTS = {
         "note_add", "note_read", "note_clear", "reminder",
         "stop", "send_email", "send_whatsapp", "send_message",
-        "calendar_today", "add_event",
+        "calendar_today", "add_event", "self_knowledge", "self_improvement",
     }
 
     @classmethod
@@ -3932,6 +5392,81 @@ class Intent:
             if any(re.search(rf"\b{re.escape(kw)}\b", lower) for kw in sorted_kws):
                 return intent
         return "ai_chat"
+
+
+class ActionPlanner:
+    EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+    EXPLICIT_SLASHES = ("/ai ", "/cmd ", "/cowork ", "/computer ", "/agent ", "/auto ", "/vision ")
+
+    @classmethod
+    def plan(cls, text: str) -> dict | None:
+        source = str(text or "").strip()
+        lower = source.lower()
+        if not source or lower.startswith(cls.EXPLICIT_SLASHES):
+            return None
+        wants_doc = bool(re.search(r"\b(document|docx|doc|report|file)\b", lower)) and bool(
+            re.search(r"\b(create|make|write|bna|bnao|bana|banao|prepare)\b", lower)
+        )
+        wants_send = bool(re.search(r"\b(send|mail|email|bhej|deliver)\b", lower)) or bool(cls.EMAIL_RE.search(source))
+        if not wants_doc:
+            return None
+        recipient = cls.extract_email(source)
+        topic = cls.extract_document_topic(source)
+        wants_telegram = bool(re.search(r"\b(telegram|tg|mujhe)\b", lower)) and not recipient and "email" not in lower and "mail" not in lower
+        steps = ["create_document"]
+        if recipient or (wants_send and not wants_telegram):
+            steps.append("send_email")
+        elif wants_telegram:
+            steps.append("send_telegram")
+        return {
+            "intent": "create_document_and_maybe_send",
+            "steps": steps,
+            "topic": topic,
+            "recipient": recipient,
+            "format": "docx",
+            "needs_confirmation": bool(recipient or "send_email" in steps),
+            "missing_fields": [
+                name for name, value in [
+                    ("topic", topic),
+                    ("recipient", recipient if "send_email" in steps else True),
+                ] if not value
+            ],
+        }
+
+    @classmethod
+    def extract_email(cls, text: str) -> str | None:
+        match = cls.EMAIL_RE.search(str(text or ""))
+        return EmailModule.normalize_recipient(match.group(0)) if match else None
+
+    @classmethod
+    def extract_document_topic(cls, text: str) -> str | None:
+        raw = cls.EMAIL_RE.sub("", str(text or "")).strip()
+        patterns = [
+            r"(?:document|docx|doc|report|file)\s+(?:bna|bnao|bana|banao|create|make|write|prepare)\s+(?!(?:ke|ko|aur|or|and)\b)(.+?)\s+(?:ke baare(?: mein| me)?|par|pe|about|on)\b",
+            r"(.+?)\s+(?:ke baare(?: mein| me)?|par|pe)\s+(?:document|docx|doc|report|file)\b",
+            r"(?:about|on|par|pe)\s+(.+?)\s+(?:document|docx|doc|report|file)\b",
+            r"(?:document|docx|doc|report|file)\s+(?:about|on|par|pe|ke baare(?: mein| me)?)\s+(.+?)(?:\s+(?:send|mail|email|bhej|deliver)\b|$)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, raw, flags=re.I)
+            if match:
+                return cls._clean_topic(match.group(1))
+        cleaned = re.sub(
+            r"\b(?:ek|a|an|create|make|write|prepare|bna|bnao|bana|banao|banakar|document|docx|doc|report|file|send|mail|email|bhej|deliver|telegram|to|ko|pe|par|ke|baare|mein|me)\b",
+            " ",
+            raw,
+            flags=re.I,
+        )
+        return cls._clean_topic(cleaned)
+
+    @staticmethod
+    def _clean_topic(topic: str) -> str | None:
+        topic = re.sub(r"\s+", " ", str(topic or "")).strip(" .,:;-")
+        topic = re.sub(r"\b(?:and|aur|or|then|fir|phir)\b.*$", "", topic, flags=re.I).strip(" .,:;-")
+        if not topic or len(topic) < 2:
+            return None
+        return topic[:120]
+
 
 # ═══════════════════════════════════════════════════════════════
 #  GREETING
@@ -3973,6 +5508,7 @@ class TelegramBotModule:
         self._offset = 0
         self._running = False
         self._thread = None
+        self._last_image_by_chat = {}
         if self.enabled:
             self._start_polling()
 
@@ -3983,13 +5519,23 @@ class TelegramBotModule:
             payload = {
                 "chat_id": chat_id,
                 "text": text,
-                "parse_mode": "Markdown",
             }
             resp = requests.post(f"{self.api_url}/sendMessage", json=payload, timeout=5)
             return resp.status_code == 200
         except Exception as e:
             print(f"[WARN] Telegram send failed: {e}")
             return False
+
+    def _send_long_message(self, chat_id: int, text: str, limit: int = 3900) -> bool:
+        clean = str(text or "").strip()
+        if not clean:
+            return self._send_message(chat_id, "")
+        chunks = _voiceengine_split_tts_text(clean, limit)
+        ok = True
+        for chunk in chunks or [clean[:limit]]:
+            ok = self._send_message(chat_id, chunk[:4096]) and ok
+            time.sleep(0.08)
+        return ok
 
     def _send_file(self, chat_id: int, file_path: str, caption: str = None) -> bool:
         """Send a file to Telegram chat."""
@@ -4008,6 +5554,112 @@ class TelegramBotModule:
         except Exception as e:
             print(f"[WARN] Telegram file send failed: {e}")
             return False
+
+    def _download_telegram_file(self, file_id: str, preferred_name: str = None) -> tuple[str | None, str | None]:
+        """Download a Telegram file/photo locally and return (path, error)."""
+        if not self.enabled or not requests:
+            return None, "Telegram is not enabled."
+        try:
+            meta = requests.get(f"{self.api_url}/getFile", params={"file_id": file_id}, timeout=12)
+            if meta.status_code != 200:
+                return None, f"Telegram getFile failed: HTTP {meta.status_code}"
+            payload = meta.json()
+            if not payload.get("ok"):
+                return None, str(payload)[:500]
+            file_path = payload.get("result", {}).get("file_path", "")
+            suffix = Path(file_path).suffix.lower()
+            if not suffix:
+                suffix = Path(preferred_name or "").suffix.lower() or ".jpg"
+            safe_stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(preferred_name or file_path or "telegram_image").stem)[:70]
+            local = TELEGRAM_DOWNLOAD_DIR / f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{safe_stem}{suffix}"
+            url = f"https://api.telegram.org/file/bot{self.token}/{file_path}"
+            data = requests.get(url, timeout=30)
+            if data.status_code != 200:
+                return None, f"Telegram file download failed: HTTP {data.status_code}"
+            local.write_bytes(data.content)
+            return str(local), None
+        except Exception as e:
+            return None, f"Telegram download failed: {e}"
+
+    def _extract_incoming_image(self, message: dict) -> tuple[str | None, str | None]:
+        """Return local image path from a Telegram photo or image document."""
+        photos = message.get("photo") or []
+        if photos:
+            best = sorted(photos, key=lambda item: item.get("file_size", 0))[-1]
+            return self._download_telegram_file(best.get("file_id", ""), "telegram_photo.jpg")
+
+        document = message.get("document") or {}
+        if document:
+            mime = str(document.get("mime_type", "") or "").lower()
+            name = str(document.get("file_name", "") or "telegram_document")
+            ext = Path(name).suffix.lower()
+            if mime.startswith("image/") or ext in IMAGE_FILE_EXTENSIONS:
+                return self._download_telegram_file(document.get("file_id", ""), name)
+        return None, None
+
+    def _should_use_last_image(self, text: str) -> bool:
+        lower = str(text or "").lower()
+        return bool(re.search(r"\b(image|photo|pic|picture|screenshot|answer|ans|bta|bata|isme|is image|ye|this)\b", lower))
+
+    def _is_owner_face_question(self, text: str) -> bool:
+        lower = str(text or "").lower()
+        return bool(
+            re.search(r"\b(owner|prashant|face\s*match|verify\s*face|identify|identity|who\s+is|who's|kaun|kon|koun|ye\s+kaun|ye\s+kon)\b", lower)
+            or "ye kaun hai" in lower
+            or "ye kon hai" in lower
+        )
+
+    def _owner_face_reply(self, image_path: str) -> str:
+        recognizer = getattr(self.jarvis, "owner_face", None)
+        if not recognizer:
+            return "Owner face verifier available nahi hai."
+        label, distance, detail = recognizer.verify_image_file(image_path)
+        if label == "OWNER":
+            return (
+                "Bhai owner-face verification pass hai. "
+                "Ye enrolled owner profile se match ho raha hai, likely Prashant. "
+                f"{detail}"
+            )
+        if label == "STRANGER":
+            return (
+                "Bhai owner-face verification me ye Prashant/owner profile se match nahi hua. "
+                "Main random person ki identity guess nahi karunga. "
+                f"{detail}"
+            )
+        if label == "NO_FACE":
+            return f"Bhai is image me clear face verify nahi ho paya. {detail}"
+        return f"Bhai owner-face verification ready nahi hai. {detail}"
+
+    def _analyze_telegram_image(self, chat_id: int, message: dict, text: str) -> bool:
+        image_path, err = self._extract_incoming_image(message)
+        if not image_path and not err and isinstance(message.get("reply_to_message"), dict):
+            image_path, err = self._extract_incoming_image(message["reply_to_message"])
+        if not image_path and not err and text and self._should_use_last_image(text):
+            cached = self._last_image_by_chat.get(chat_id)
+            if cached and Path(cached).exists():
+                image_path = cached
+        if err:
+            self._send_message(chat_id, err)
+            return True
+        if not image_path:
+            return False
+        self._last_image_by_chat[chat_id] = image_path
+        question = (text or message.get("caption") or "").strip()
+        if not question:
+            question = "Analyze this image clearly. Mention visible objects, text, UI errors, and what action I should take next."
+        elif question.lower().startswith(("/ai", "/vision", "/analyze")):
+            question = re.sub(r"^/(?:ai|vision|analyze)\s*", "", question, flags=re.I).strip() or "Analyze this image."
+        if self._is_owner_face_question(question):
+            self._send_message(chat_id, "🧠 Image received. Verifying against owner face profile...")
+            self._send_long_message(chat_id, self._owner_face_reply(image_path))
+            return True
+        self._send_message(chat_id, "🧠 Image received. Analyzing now...")
+        try:
+            response = self.jarvis.ai.analyze_image(image_path, question)
+        except Exception as e:
+            response = f"Image analysis failed: {e}"
+        self._send_long_message(chat_id, str(response or "No analysis returned.").strip())
+        return True
 
     def _get_updates(self) -> list:
         if not self.enabled or not requests:
@@ -4031,11 +5683,14 @@ class TelegramBotModule:
             message = update.get("message", {})
             chat_id = message.get("chat", {}).get("id")
             user_id = message.get("from", {}).get("id")
-            text = message.get("text", "").strip()
+            text = (message.get("text") or message.get("caption") or "").strip()
 
             # Security: only allow the configured user
             if user_id != self.allowed_user_id:
                 self._send_message(chat_id, "🔒 Unauthorized access attempt blocked.")
+                return
+
+            if self._analyze_telegram_image(chat_id, message, text):
                 return
 
             if not text:
@@ -4049,7 +5704,7 @@ class TelegramBotModule:
             finally:
                 self.jarvis._is_telegram_context = False
             response_text = str(response or "Command executed.").strip()[:4096]
-            self._send_message(chat_id, response_text if response_text else "✅ Done.")
+            self._send_long_message(chat_id, response_text if response_text else "✅ Done.")
             
             # Check if there's a file to send
             if hasattr(self.jarvis, '_telegram_file_to_send') and self.jarvis._telegram_file_to_send:
@@ -4141,6 +5796,7 @@ class JARVIS:
         self.system   = SystemModule(self.cfg)
         self.camera   = CameraModule(self.cfg)
         self.email    = EmailModule(self.cfg)
+        self.documents = DocumentModule(GENERATED_DIR)
         self.whatsapp = WhatsAppModule(self.cfg)
         self.telegram = None  # Initialize placeholder
         self.contacts = ContactsModule(self.cfg)
@@ -4148,6 +5804,8 @@ class JARVIS:
         self.weather  = WeatherModule(self.cfg)
         self.news     = NewsModule(self.cfg)
         self.location = LocationModule(self.cfg)
+        self.browser  = BrowserControlModule(self.cfg)
+        self.agent    = VisionActionAgent(self.cfg)
         self.notes    = NotesModule()
         self.calendar = CalendarModule()
         self.greeter  = Greeter(self.name)
@@ -4157,7 +5815,34 @@ class JARVIS:
         self._is_telegram_context = False
         self._telegram_file_to_send = None
         self.ai.voice_engine = self.voice
-        self.telegram = TelegramBotModule(self.cfg, jarvis_instance=self)  # Initialize after JARVIS is ready
+        telegram_cfg = dict(self.cfg)
+        if str(os.getenv("JARVIS_DISABLE_TELEGRAM", "")).strip().lower() in {"1", "true", "yes", "on"}:
+            telegram_cfg["telegram_enabled"] = False
+        self.telegram = TelegramBotModule(telegram_cfg, jarvis_instance=self)  # Initialize after JARVIS is ready
+        self.personal_telegram_secretary = None
+        if bool(self.cfg.get("telegram_personal_enabled", False)):
+            try:
+                import jarvis_personal_telegram
+                self.personal_telegram_secretary = jarvis_personal_telegram.start_background(jarvis_instance=self)
+            except Exception as exc:
+                print(f"[WARN] Personal Telegram secretary failed to start: {exc}")
+        self.notification_secretary = None
+        if bool(self.cfg.get("secretary_enabled", False)):
+            try:
+                import jarvis_secretary
+                jarvis_secretary.start_background(jarvis_instance=self)
+                self.notification_secretary = getattr(jarvis_secretary, "_default_secretary", None)
+                apps = ", ".join(getattr(self.notification_secretary, "apps", []) or [])
+                print(f"  [OK] Windows notification secretary started for: {apps}")
+            except Exception as exc:
+                print(f"[WARN] Windows notification secretary failed to start: {exc}")
+        self.proactive = None
+        if ProactiveEngine:
+            try:
+                self.proactive = ProactiveEngine(self)
+                self.proactive.start()
+            except Exception as exc:
+                print(f"[WARN] ProactiveEngine failed to start: {exc}")
 
         try:
             print("  [OK] All systems online.\n")
@@ -4179,17 +5864,301 @@ class JARVIS:
         if quoted:
             return quoted.group(1).strip()
 
-        drive = re.search(r"([A-Za-z]:\\.*?)(?=\s+\bwith content\b|$)", source, re.I)
+        drive = re.search(
+            r"([A-Za-z]:\\.*?)(?=\s+\b(?:with content|by telegram|via telegram|to telegram|on telegram|mujhe|please)\b|$)",
+            source,
+            re.I,
+        )
         if drive:
             return drive.group(1).strip().rstrip(" .")
+        return None
+
+    def _extract_share_file_path(self, text: str) -> str | None:
+        path = self._extract_storage_path(text)
+        if path:
+            return path
+        raw = re.sub(r"^/(?:agent|auto|vision)\s+", "", str(text or ""), flags=re.I).strip()
+        raw = re.sub(r"^/(?:file|sendfile|sharefile)\s+", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:share|send|bhej|bhejo|deliver)\s+(?:file|document|photo|video|report)\b", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:file|document|photo|video|report)\s+(?:share|send|bhej|deliver|bhejo)\b", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:by|via|through|using|to|on)\s+telegram\b", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:to me|mujhe|please|plz|mere|mera|meri|my|laptop|pc|computer)\b", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:ko|pe|par|se|from)\s*$", "", raw, flags=re.I).strip()
+        raw = re.sub(r"\b(?:bhejo|bhej\s*do|send\s*(?:kar\s*)?do|share\s*(?:kar\s*)?do|deliver\s*(?:kar\s*)?do)\b\s*$", "", raw, flags=re.I).strip()
+        folder_match = re.search(
+            r"\b(desktop|downloads?|documents?|pictures?|photos?|videos?|music)\b(?:\s+folder)?(?:\s+(?:se|from|mein|me|ke andar|inside))?\s+(.+)$",
+            raw,
+            flags=re.I,
+        )
+        if folder_match:
+            alias = folder_match.group(1).lower()
+            alias = {
+                "download": "downloads",
+                "downloads": "downloads",
+                "document": "documents",
+                "documents": "documents",
+                "picture": "pictures",
+                "pictures": "pictures",
+                "photo": "pictures",
+                "photos": "pictures",
+                "video": "videos",
+                "videos": "videos",
+            }.get(alias, alias)
+            tail = folder_match.group(2).strip(" .,:;-\"'")
+            if tail:
+                return f"{alias}/{tail}"
+        return raw or None
+
+    def _build_operator_report(self) -> str:
+        now = datetime.datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
+        sections = [
+            f"J.A.R.V.I.S operator report for {self.name}",
+            f"Generated: {now}",
+            f"System: {platform.system()} {platform.release()}",
+            f"Hardware: {self.system.hardware_report()}",
+            f"Thermals: {self.system.thermal_report()}",
+            f"Network: {self.system.network_info()}",
+            f"Top processes: {self.system.top_processes()}",
+            f"Location: {self.location.get_str()}",
+        ]
+        try:
+            sections.append(f"Notes: {self.notes.read()}")
+        except Exception:
+            pass
+        return "\n".join(sections)
+
+    def _send_text_to_owner(self, subject: str, body: str) -> str:
+        if self.telegram and getattr(self.telegram, "enabled", False):
+            ok = self.telegram._send_message(self.telegram.allowed_user_id, body[:3900])
+            if ok:
+                return "Report sent to your Telegram."
+            return "Telegram is configured, but the report send failed."
+        if self.email.enabled and self.email.email:
+            return self.email.send_email(self.email.email, subject, body)
+        return "No delivery channel is configured. Enable Telegram or email in jarvis_config.json."
+
+    def _send_file_to_owner(self, file_path: str) -> str:
+        target, caption = self.system.download_file_telegram(file_path)
+        if not target:
+            return caption
+        if self.telegram and getattr(self.telegram, "enabled", False):
+            ok = self.telegram._send_file(self.telegram.allowed_user_id, target, caption)
+            return f"Shared {Path(target).name} to your Telegram." if ok else "Telegram file share failed."
+        if self.email.enabled and self.email.email:
+            return self.email.send_email_with_attachment(
+                self.email.email,
+                f"J.A.R.V.I.S shared file: {Path(target).name}",
+                "File shared by J.A.R.V.I.S.",
+                target,
+            )
+        return "No delivery channel is configured. Enable Telegram or email in jarvis_config.json."
+
+    def _send_operator_report(self) -> str:
+        report = self._build_operator_report()
+        return self._send_text_to_owner("J.A.R.V.I.S Operator Report", report)
+
+    def _handle_operator_command(self, text: str) -> str | None:
+        lower = text.lower().strip()
+        explicit_path = self._extract_storage_path(text)
+
+        if re.search(r"\b(?:secretary|notification secretary|notifications?)\b", lower):
+            if re.search(r"\b(?:status|working|enabled|running|kaam|check|test)\b", lower):
+                secretary = getattr(self, "notification_secretary", None)
+                if secretary and hasattr(secretary, "status"):
+                    return secretary.status()
+                enabled = bool(self.cfg.get("secretary_enabled", False))
+                apps = ", ".join(self.cfg.get("secretary_apps", []) or [])
+                return (
+                    f"Windows notification secretary {'enabled' if enabled else 'disabled'} hai, "
+                    f"lekin active thread nahi mila. Apps: {apps or 'not configured'}."
+                )
+
+        if lower.startswith(("/file ", "/sendfile ", "/sharefile ")):
+            path = self._extract_share_file_path(text)
+            return self._send_file_to_owner(path) if path else "Tell me which file to share."
+
+        if re.search(r"\b(send|share|bhej|deliver)\b.*\b(report|status|system report|operator report)\b", lower) or re.search(r"\b(report|status)\b.*\b(send|share|bhej)\b", lower):
+            return self._send_operator_report()
+
+        if re.fullmatch(r"(?:operator\s+)?(?:system\s+)?(?:status|report|system report|operator report)", lower):
+            return self._build_operator_report()
+
+        if re.search(r"\b(operator|control|capabilities|what can you control)\b", lower):
+            return (
+                "Operator control is online. I can open apps, open files and folders, edit text/code files, "
+                "create files or folders, search project files, share files to you, and send system reports. "
+                "Use commands like: open Chrome, edit file \"C:\\path\\note.txt\", share file \"C:\\path\\report.pdf\", or send me report."
+            )
+
+        if re.search(r"\b(?:edit|modify|update)\s+(?:file|document|note|config|script)\b", lower):
+            path = explicit_path or re.split(r"\b(?:edit|modify|update)\s+(?:file|document|note|config|script)\b", text, maxsplit=1, flags=re.I)[-1].strip()
+            return self.system.edit_file(path) if path else "Tell me which file to edit."
+
+        if re.search(r"\b(?:share|send|bhej|deliver)\s+(?:file|document|photo|video|report)\b", lower):
+            path = explicit_path or self._extract_share_file_path(text)
+            return self._send_file_to_owner(path) if path else "Tell me which file to share."
+
+        if (
+            re.search(r"\b(?:telegram|mujhe|bhejo|bhej do|send me|send kar do|share kar do)\b", lower)
+            and (
+                re.search(r"\.(?:[a-z0-9]{1,8})\b", lower)
+                or re.search(r"\b(?:desktop|downloads?|documents?|pictures?|photos?|videos?|music)\b", lower)
+                or explicit_path
+            )
+        ):
+            path = explicit_path or self._extract_share_file_path(text)
+            return self._send_file_to_owner(path) if path else "Tell me which file to share."
+
+        return None
+
+    def _handle_browser_command(self, text: str) -> str | None:
+        lower = text.lower().strip()
+        if not re.search(r"\b(browser|web page|website|tab)\b", lower):
+            return None
+
+        if re.search(r"\b(browser|website|web page)\s+(?:open|go to|navigate to)\b", lower):
+            target = re.split(r"\b(?:open|go to|navigate to)\b", text, maxsplit=1, flags=re.I)[-1].strip()
+            return self.browser.open(target)
+
+        if re.search(r"\b(?:open|go to|navigate to)\s+(?:website|web page|browser)\b", lower):
+            target = re.split(r"\b(?:website|web page|browser)\b", text, maxsplit=1, flags=re.I)[-1].strip()
+            return self.browser.open(target)
+
+        if re.search(r"\b(browser|web)\s+search\b", lower):
+            query = re.split(r"\bsearch\b", text, maxsplit=1, flags=re.I)[-1].strip()
+            query = re.sub(r"^\b(for|about)\b", "", query, flags=re.I).strip()
+            return self.browser.search(query)
+
+        if re.search(r"\b(read|summarize|scan)\s+(?:the\s+)?(?:browser|web page|page|tab)\b", lower) or re.search(r"\b(browser|tab)\s+(?:read|scan)\b", lower):
+            return self.browser.read_page()
+
+        if re.search(r"\b(browser|web page|tab)\s+click\b", lower):
+            label = re.split(r"\bclick\b", text, maxsplit=1, flags=re.I)[-1].strip().strip('"')
+            return self.browser.click_text(label)
+
+        if re.search(r"\b(browser|web page|tab)\s+type\b", lower):
+            content = re.split(r"\btype\b", text, maxsplit=1, flags=re.I)[-1].strip().strip('"')
+            return self.browser.type_text(content)
+
+        if re.search(r"\b(browser|web page|tab)\s+screenshot\b", lower):
+            return self.browser.screenshot()
+
+        if re.search(r"\b(browser|web)\s+(control|capabilities|help)\b", lower):
+            return (
+                "Browser control is online through Playwright. I can open websites, search, read the current page, "
+                "click visible text, type into the focused field, and capture browser screenshots. Try: browser open youtube.com."
+            )
+
+        return None
+
+    def _handle_agent_command(self, text: str) -> str | None:
+        source = str(text or "").strip()
+        lower = source.lower()
+        if not lower.startswith(("/agent ", "/auto ", "/vision ")):
+            return None
+        goal = re.sub(r"^/(?:agent|auto|vision)\s+", "", source, flags=re.I).strip()
+        confirmed = False
+        if goal.lower().startswith("confirm "):
+            confirmed = True
+            goal = goal[8:].strip()
+        if not goal:
+            return "Tell me the automation goal after /agent."
+        if goal.lower() in {"help", "capabilities", "status"}:
+            return (
+                "Autonomous agent mode is ready. Use /agent followed by a goal. "
+                "It observes the screen, asks Gemini Vision for one JSON action, executes with pyautogui, and repeats until done. "
+                "Examples: /agent open browser and search Python tutorials, /agent read the current screen and explain it."
+            )
+        direct_resp = self._handle_direct_agent_shortcut(goal)
+        if direct_resp:
+            return direct_resp
+        if self.agent._read_only_goal(goal):
+            screenshot, err = self.agent._capture_screen()
+            if err:
+                return err
+            analysis = self.agent._describe_screen(goal, screenshot)
+            if re.search(r"\b(Gemini .*failed|quota|429|timed out|read timeout|request failed)\b", analysis, re.I):
+                try:
+                    fallback = self.ai.analyze_image(
+                        screenshot,
+                        f"{goal}\n\nIf the screen contains an error, explain what it means and how to fix it. Answer in concise Hinglish.",
+                    )
+                    if fallback and not fallback.lower().startswith("ai error"):
+                        return fallback
+                except Exception as exc:
+                    return f"{analysis}\nFallback vision also failed: {exc}"
+            return analysis
+        if confirmed:
+            original = self.agent._dangerous_goal
+            try:
+                self.agent._dangerous_goal = lambda _goal: False
+                return self.agent.run(goal)
+            finally:
+                self.agent._dangerous_goal = original
+        return self.agent.run(goal)
+
+    def _handle_direct_agent_shortcut(self, goal: str) -> str | None:
+        """Route obvious local OS requests without spending a vision call."""
+        lower = str(goal or "").lower().strip()
+        if not lower:
+            return None
+        if re.search(r"\b(?:open|launch|show|start)\b", lower) and re.search(r"\b(?:camera|webcam|web cam|camera app)\b", lower):
+            if re.search(r"\b(?:feed|live|view|webcam|web cam)\b", lower):
+                threading.Thread(target=self.camera.show_live_feed, daemon=True).start()
+                return "Camera feed opened. Press Q in the camera window to close."
+            return self.system.open_app("camera")
+        if re.search(r"\b(?:take|capture|click)\b", lower) and re.search(r"\b(?:photo|picture|selfie)\b", lower):
+            ok, result = self.camera.capture_photo()
+            return f"Photo saved at {result}." if ok else result
+        if re.search(r"\b(?:record|capture)\b", lower) and re.search(r"\b(?:video|clip)\b", lower):
+            nums = re.findall(r"\d+", lower)
+            secs = int(nums[0]) if nums else 10
+            ok, result = self.camera.record_video(secs)
+            return f"Video saved at {result}." if ok else result
+        if re.search(r"\b(?:list|check|detect|available)\b", lower) and re.search(r"\b(?:camera|webcam|web cam)\b", lower):
+            return self.camera.list_cameras()
+        if re.search(r"\b(?:share|send|bhej|deliver)\s+(?:file|document|photo|video|report)\b", lower):
+            path = self._extract_share_file_path(goal)
+            return self._send_file_to_owner(path) if path else "Tell me which file to share."
+        if re.search(r"\b(?:open|launch|show)\b", lower) and re.search(r"\b(?:desktop|desk top)\b", lower):
+            return self.system.open_desktop_folder()
+        if re.search(r"\b(?:open|launch|show)\b", lower) and re.search(r"\b(?:file explorer|explorer|file manager)\b", lower):
+            return self.system.open_app("file explorer")
+        if re.search(r"\b(?:open|launch|show)\b", lower) and re.search(r"\b(?:downloads|documents|pictures|photos)\s+(?:folder|in file explorer|in explorer)\b", lower):
+            folder_match = re.search(r"\b(downloads|documents|pictures|photos)\b", lower)
+            if folder_match:
+                folder = folder_match.group(1)
+                if folder == "photos":
+                    folder = "pictures"
+                return self.system.open_file(folder)
         return None
 
     def _handle_storage_command(self, text: str) -> str | None:
         lower = text.lower().strip()
         explicit_path = self._extract_storage_path(text)
 
+        folder_match = re.search(r"\b(downloads|documents|pictures|photos)\s+(?:folder\s+)?(?:kholo|open|show|dikhao)\b", lower)
+        if folder_match:
+            folder = folder_match.group(1)
+            if folder == "photos":
+                folder = "pictures"
+            opened = self.system.open_file(folder)
+            if re.search(r"\b(?:batao|list|files|important|kya)\b", lower):
+                listing = self.system.list_files_telegram(folder)
+                return f"{opened}\n{listing}"
+            return opened
+
+        if re.search(r"\b(?:disk|storage|drive|space)\b.*\b(?:cleanup|clean up|report|audit|free)\b", lower) or re.search(r"\b(?:cleanup|clean up)\b.*\b(?:disk|storage|drive|space)\b", lower):
+            return self.system.disk_cleanup_report()
+
         if explicit_path and lower.startswith(("open ", "show ", "launch ")):
             return self.system.open_file(explicit_path)
+
+        if re.search(r"\b(?:open|launch|show)\b", lower) and re.search(r"\b(?:desktop|desk top)\b", lower):
+            return self.system.open_desktop_folder()
+
+        if re.search(r"\b(?:open|launch|show)\b", lower) and re.search(r"\b(?:file explorer|explorer|file manager)\b", lower):
+            return self.system.open_app("file explorer")
 
         if re.search(r"\b(?:create|make|new)\s+folder\b", lower):
             folder_path = explicit_path or re.split(r"\b(?:create|make|new)\s+folder\b", text, maxsplit=1, flags=re.I)[-1].strip()
@@ -4221,15 +6190,365 @@ class JARVIS:
 
         return None
 
+    def _handle_proactive_command(self, text: str) -> str | None:
+        lower = text.lower().strip()
+        if "proactive" not in lower:
+            return None
+        if not self.proactive:
+            return "Proactive engine is not available."
+        if any(word in lower for word in ("status", "state", "check")):
+            return self.proactive.status()
+        if any(word in lower for word in ("test", "try", "demo")):
+            return self.proactive.test()
+        if any(word in lower for word in ("disable", "off", "stop")):
+            return self.proactive.set_enabled(False)
+        if any(word in lower for word in ("enable", "on", "start")):
+            return self.proactive.set_enabled(True)
+        return self.proactive.status()
+
+    def _handle_relay_command(self, text: str) -> str | None:
+        lower = text.lower().strip()
+        if not re.search(r"\b(?:light|bulb|relay|lamp|batti)\b", lower):
+            return None
+        if not bool(self.cfg.get("relay_enabled", False)):
+            return None
+        try:
+            from jarvis_modules.relay_control import RelayControl
+            relay = RelayControl(self.cfg)
+            if re.search(r"\b(?:status|state|haal|check)\b", lower):
+                status = relay.status()
+                return f"Light abhi {status} hai bhai."
+            if re.search(r"\b(?:on|chalu|jalaa|jala|start)\b", lower):
+                return "Light on kar di bhai." if relay.on() else "NodeMCU ne on confirm nahi kiya."
+            if re.search(r"\b(?:off|band|bujha|stop)\b", lower):
+                return "Light band kar di bhai." if relay.off() else "NodeMCU ne off confirm nahi kiya."
+        except Exception as exc:
+            return f"NodeMCU se connect nahi ho paya: {exc}"
+        return None
+
+    def _handle_action_plan(self, text: str) -> str | None:
+        plan = ActionPlanner.plan(text)
+        if not plan or plan.get("intent") != "create_document_and_maybe_send":
+            return None
+
+        topic = plan.get("topic")
+        recipient = plan.get("recipient")
+        missing = set(plan.get("missing_fields") or [])
+
+        if "topic" in missing:
+            topic = self._ask_user("Document kis topic par banaun?")
+            if not topic:
+                return "Document cancelled."
+            topic = ActionPlanner._clean_topic(topic)
+        if not topic:
+            return "Document kis topic par banana hai?"
+
+        steps = plan.get("steps") or []
+        should_send = "send_email" in steps
+        should_send_telegram = "send_telegram" in steps
+        if should_send and "recipient" in missing:
+            recipient = self._ask_user("Kis email address par bheju?")
+            if not recipient:
+                return "Email cancelled."
+        if should_send:
+            recipient = ActionPlanner.extract_email(recipient or "")
+            if not recipient:
+                return "Valid email address nahi mila. Please email address clearly bhejo."
+
+        title = self._title_for_topic(topic)
+        content = self._draft_document_content(topic)
+        doc_path = self.documents.create_docx(title, content, output_name=title)
+        if not str(doc_path).lower().endswith(".docx"):
+            return str(doc_path)
+
+        if should_send_telegram:
+            self._telegram_file_to_send = (doc_path, f"{title} document")
+            return f"Document ready hai: {Path(doc_path).name}"
+
+        if not should_send:
+            if getattr(self, "_is_telegram_context", False):
+                self._telegram_file_to_send = (doc_path, f"{title} document")
+                return f"Document ready hai: {Path(doc_path).name}"
+            return f"Document ready hai: {doc_path}"
+
+        confirmation = self._ask_confirmation(
+            f"Bhai document ready hai: {Path(doc_path).name}. Send kar du {recipient} pe?"
+        )
+        if not confirmation:
+            return f"Document ready hai, send cancel kiya: {doc_path}"
+
+        subject = f"{title} - JARVIS Document"
+        body = f"Hi,\n\nAttached is the document on {topic} prepared by JARVIS.\n\nRegards,\nJARVIS"
+        return self.email.send_email_with_attachment(recipient, subject, body, doc_path)
+
+    def _ask_user(self, prompt: str) -> str | None:
+        if getattr(self, "_is_telegram_context", False) and self.telegram:
+            self.telegram.notify(prompt)
+            return self.telegram.wait_for_reply()
+        self.voice.speak(prompt)
+        return self.listen_or_type()
+
+    def _ask_confirmation(self, prompt: str) -> bool:
+        answer = (self._ask_user(prompt) or "").strip().lower()
+        return any(word in answer for word in ("yes", "haan", "ha", "send", "bhej", "kar do", "ok", "okay"))
+
+    def _extract_email_fields(self, text: str) -> tuple[str | None, str | None, str | None]:
+        raw = str(text or "").strip()
+        to = EmailModule.normalize_recipient(ActionPlanner.extract_email(raw) or "")
+        subject = None
+        body = None
+
+        subject_match = re.search(
+            r"\bsubject\s+(.+?)(?=\s+(?:aur|and)?\s*body\b|\s+message\b|$)",
+            raw,
+            re.I,
+        )
+        if subject_match:
+            subject = subject_match.group(1).strip(" .,:;-")
+
+        body_match = re.search(r"\bbody\s+(.+)$", raw, re.I)
+        if body_match:
+            body = body_match.group(1).strip(" .,:;-")
+        elif re.search(r"\bmessage\b", raw, re.I):
+            parts = re.split(r"\bmessage\b", raw, maxsplit=1, flags=re.I)
+            if len(parts) > 1:
+                body = parts[1].strip(" .,:;-")
+
+        return to or None, subject or None, body or None
+
+    def _sensitive_file_response(self, text: str) -> str | None:
+        lower = str(text or "").lower()
+        sensitive_match = re.search(
+            r"\b(?:jarvis_config\.json|\.env|env file|token(?:s)?|api[_ -]?key(?:s)?|password(?:s)?|secret(?:s)?)\b",
+            lower,
+        )
+        if not sensitive_match:
+            return None
+        wants_file_action = re.search(
+            r"\b(?:read|show|print|content|contents|batao|dikhao|dhundo|dhoondo|find|search|locate|where|send|share|bhej|deliver|upload)\b",
+            lower,
+        )
+        if not wants_file_action:
+            return None
+        query = "jarvis_config.json" if "jarvis_config.json" in lower else sensitive_match.group(0)
+        found = self.system.search_files(query)
+        return (
+            f"{found}\n"
+            "Sensitive file hai, isliye main iska content/API keys/passwords Telegram ya chat me reveal nahi karunga."
+        )
+
+    def _handle_self_knowledge_command(self, text: str, force_rebuild: bool = False) -> str | None:
+        lower = str(text or "").lower()
+        wants_self_scan = bool(re.search(
+            r"\b(?:read|scan|index|learn|study|update|rebuild)\b.*\b(?:j\.?a\.?r\.?v\.?i\.?s|jarvis|yourself|your code|folder|project)\b",
+            lower,
+        ))
+        asks_self_build = bool(re.search(
+            r"\b(?:how were you made|how are you made|what are you made of|what is inside (?:your|the) project|what do you know about yourself|self[- ]knowledge)\b",
+            lower,
+        ))
+        if not (force_rebuild or wants_self_scan or asks_self_build):
+            return None
+
+        if not build_self_knowledge or not load_self_knowledge:
+            return "Self-knowledge module available nahi hai, Prashant. jarvis_modules/self_knowledge.py import fail ho raha hai."
+
+        should_rebuild = force_rebuild or wants_self_scan or not SELF_KNOWLEDGE_FILE.exists()
+        if should_rebuild:
+            try:
+                data = build_self_knowledge(BASE_DIR, SELF_KNOWLEDGE_FILE)
+            except Exception as exc:
+                return f"Self-knowledge scan fail ho gaya: {exc}"
+            action = "updated"
+        else:
+            data = load_self_knowledge(SELF_KNOWLEDGE_FILE)
+            action = "loaded"
+
+        if not data:
+            return "Self-knowledge file abhi empty hai. Scan dobara try karo."
+
+        entries = data.get("entries") or []
+        skipped = data.get("skipped") or {}
+        summary = str(data.get("summary", "")).strip()
+        first_line = summary.splitlines()[0] if summary else "I am JARVIS, Prashant ka personal assistant."
+        return (
+            f"Self-knowledge {action} ho gaya, Prashant. "
+            f"Maine {len(entries)} safe project entries index kiye aur secrets/sessions/binaries skip kiye. "
+            f"Skipped: {skipped}. {first_line} "
+            f"Ab tum puchh sakte ho: 'JARVIS, how were you made?'"
+        )
+
+    def _handle_self_improvement_command(self, text: str, force_queue: bool = False) -> str | None:
+        if not bool(self.cfg.get("self_improvement_enabled", True)):
+            return None
+        if not (looks_like_self_improvement_request and save_self_improvement_request and response_for_request):
+            return None
+        if not (force_queue or looks_like_self_improvement_request(text)):
+            return None
+
+        request = save_self_improvement_request(
+            SELF_IMPROVEMENT_REQUESTS_FILE,
+            text,
+            owner=self.name,
+        )
+        return response_for_request(request)
+
+    def _handle_screen_document_command(self, text: str) -> str | None:
+        lower = str(text or "").lower()
+        if not (
+            re.search(r"\b(?:current\s+screen|screen)\b", lower)
+            and re.search(r"\b(?:summary|summarize|read|text)\b", lower)
+            and re.search(r"\b(?:document|docx|doc|save)\b", lower)
+        ):
+            return None
+        screen_text = self.system.read_screen_text()
+        if not screen_text or screen_text.lower().startswith(("pyautogui not installed", "screen reading requires", "screen ocr failed")):
+            return screen_text
+        prompt = (
+            "Summarize this current screen text clearly in Hinglish. "
+            "Keep it useful and structured for a saved document.\n\n"
+            f"{screen_text[:5000]}"
+        )
+        try:
+            summary = self.ai.chat(prompt, context="Summarize current screen into document")
+        except Exception:
+            summary = screen_text[:3000]
+        title = "Current Screen Summary"
+        doc_path = self.documents.create_docx(title, str(summary or screen_text), output_name=title)
+        if not str(doc_path).lower().endswith(".docx"):
+            return str(doc_path)
+        if getattr(self, "_is_telegram_context", False):
+            self._telegram_file_to_send = (doc_path, "Current screen summary document")
+            return f"Screen summary document ready hai: {Path(doc_path).name}"
+        return f"Screen summary document saved: {doc_path}"
+
+    def _title_for_topic(self, topic: str) -> str:
+        words = re.split(r"\s+", str(topic or "Document").strip())
+        return " ".join(word[:1].upper() + word[1:] for word in words if word) or "JARVIS Document"
+
+    def _draft_document_content(self, topic: str) -> str:
+        prompt = (
+            f"Create a clear student-friendly document about: {topic}.\n"
+            "Use a title, short introduction, key concepts, examples, practical uses, and summary. "
+            "Keep it concise but complete. Plain text only; headings are allowed."
+        )
+        try:
+            draft = self.ai.chat(prompt, context="Generate DOCX document content")
+        except Exception as exc:
+            draft = f"{topic}\n\nDocument generation failed through AI: {exc}"
+        return str(draft or "").strip()
+
+    def _extract_inline_note(self, text: str) -> str | None:
+        raw = str(text or "").strip()
+        cleaned = re.sub(r"\b(?:note|notes|bnao|bna|bana|take|write|jot|that|ki|karo)\b", " ", raw, flags=re.I)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;-")
+        return cleaned or None
+
+    def _extract_inline_reminder(self, text: str) -> tuple[str | None, int | None]:
+        raw = str(text or "").strip()
+        lower = raw.lower()
+        mins = None
+        match = re.search(r"(\d+)\s*(?:minute|minutes|min|mins)", lower)
+        if match:
+            mins = int(match.group(1))
+        elif "hour" in lower or "ghante" in lower:
+            hour_match = re.search(r"(\d+)\s*(?:hour|hours|ghante|ghanta)", lower)
+            mins = int(hour_match.group(1)) * 60 if hour_match else 60
+        body = re.sub(r"\b(?:mujhe|remind me|reminder|set reminder|alert me|yaad|dilao|baad|after|in)\b", " ", raw, flags=re.I)
+        body = re.sub(r"\d+\s*(?:minute|minutes|min|mins|hour|hours|ghante|ghanta)", " ", body, flags=re.I)
+        body = re.sub(r"\s+", " ", body).strip(" .,:;-")
+        return (body or None), mins
+
+    def _extract_inline_event(self, text: str) -> tuple[str | None, str | None, str | None]:
+        raw = str(text or "").strip()
+        lower = raw.lower()
+        today = datetime.date.today()
+        date = None
+        if re.search(r"\b(kal|tomorrow)\b", lower):
+            date = (today + datetime.timedelta(days=1)).isoformat()
+        elif re.search(r"\b(aaj|today)\b", lower):
+            date = today.isoformat()
+        else:
+            match = re.search(r"\b(20\d{2}-\d{1,2}-\d{1,2})\b", lower)
+            if match:
+                date = match.group(1)
+        time_str = None
+        tm = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(?:baje|am|pm)?\b", lower)
+        if tm:
+            hour = int(tm.group(1))
+            minute = int(tm.group(2) or 0)
+            if "pm" in lower and hour < 12:
+                hour += 12
+            if "am" in lower and hour == 12:
+                hour = 0
+            if "baje" in lower and hour <= 7 and not re.search(r"\bsubah|morning|am\b", lower):
+                hour += 12
+            time_str = f"{hour:02d}:{minute:02d}"
+        title = re.sub(r"\b(?:kal|tomorrow|aaj|today|add|event|schedule|book|meeting|create|karo|karna|baje|am|pm)\b", " ", raw, flags=re.I)
+        title = re.sub(r"\b20\d{2}-\d{1,2}-\d{1,2}\b", " ", title)
+        title = re.sub(r"\b\d{1,2}(?::\d{2})?\b", " ", title)
+        title = re.sub(r"\s+", " ", title).strip(" .,:;-")
+        return title or None, date, time_str
+
     def handle(self, text: str) -> str:
         if not text or not text.strip():
             return ""
+        if self.proactive:
+            try:
+                self.proactive.ping()
+            except Exception:
+                pass
 
-        # If user explicitly requests AI multimodal chat, bypass local regex commands
-        if text.lower().strip().startswith("/ai "):
+        stripped_lower = text.lower().strip()
+        # Explicit slash aliases keep their old behavior.
+        if stripped_lower.startswith(("/cowork ", "/computer ")):
             intent = "ai_chat"
             lower = text.lower()
+        elif stripped_lower.startswith("/ai "):
+            intent = "ai_chat"
+            lower = text.lower()
+            text = text[4:].strip() # Strip the /ai prefix for cleaner AI context
         else:
+            self_improvement_resp = self._handle_self_improvement_command(text)
+            if self_improvement_resp:
+                self.voice.speak(self_improvement_resp)
+                return self_improvement_resp
+            self_knowledge_resp = self._handle_self_knowledge_command(text)
+            if self_knowledge_resp:
+                self.voice.speak(self_knowledge_resp)
+                return self_knowledge_resp
+            sensitive_resp = self._sensitive_file_response(text)
+            if sensitive_resp:
+                self.voice.speak(sensitive_resp)
+                return sensitive_resp
+            screen_doc_resp = self._handle_screen_document_command(text)
+            if screen_doc_resp:
+                self.voice.speak(screen_doc_resp)
+                return screen_doc_resp
+            action_resp = self._handle_action_plan(text)
+            if action_resp:
+                self.voice.speak(action_resp)
+                return action_resp
+            agent_resp = self._handle_agent_command(text)
+            if agent_resp:
+                self.voice.speak(agent_resp)
+                return agent_resp
+            browser_resp = self._handle_browser_command(text)
+            if browser_resp:
+                self.voice.speak(browser_resp)
+                return browser_resp
+            operator_resp = self._handle_operator_command(text)
+            if operator_resp:
+                self.voice.speak(operator_resp)
+                return operator_resp
+            proactive_resp = self._handle_proactive_command(text)
+            if proactive_resp:
+                self.voice.speak(proactive_resp)
+                return proactive_resp
+            relay_resp = self._handle_relay_command(text)
+            if relay_resp:
+                self.voice.speak(relay_resp)
+                return relay_resp
             storage_resp = self._handle_storage_command(text)
             if storage_resp:
                 self.voice.speak(storage_resp)
@@ -4242,6 +6561,8 @@ class JARVIS:
         if intent == "stop":
             resp = self.greeter.bye()
             self.voice.speak(resp)
+            if self.proactive:
+                self.proactive.stop()
             self._running = False
             return resp
 
@@ -4308,24 +6629,47 @@ class JARVIS:
             resp = self.email.check_inbox(5)
 
         elif intent == "send_email":
+            inline_to, inline_sub, inline_body = self._extract_email_fields(text)
             if getattr(self, "_is_telegram_context", False) and self.telegram:
-                self.telegram.notify("To whom?")
-                to = self.telegram.wait_for_reply()
+                to = inline_to
+                if not to:
+                    self.telegram.notify("To whom?")
+                    to = self.telegram.wait_for_reply()
                 if not to: return "Email cancelled."
-                self.telegram.notify("Subject?")
-                sub = self.telegram.wait_for_reply()
+                to = EmailModule.normalize_recipient(to)
+                if not to: return "Invalid email address. Please check recipient email and try again."
+                sub = inline_sub
+                if not sub:
+                    self.telegram.notify("Subject?")
+                    sub = self.telegram.wait_for_reply()
                 if not sub: return "Email cancelled."
-                self.telegram.notify("What should I say?")
-                body = self.telegram.wait_for_reply()
+                body = inline_body
+                if not body:
+                    self.telegram.notify("What should I say?")
+                    body = self.telegram.wait_for_reply()
                 if not body: return "Email cancelled."
             else:
-                self.voice.speak("To whom?")
-                to = self.listen_or_type()
-                self.voice.speak("Subject?")
-                sub = self.listen_or_type()
-                self.voice.speak("What should I say?")
-                body = self.listen_or_type()
-            resp = self.email.send_email(to, sub, body) if all([to,sub,body]) else "Email cancelled."
+                to = inline_to
+                if not to:
+                    self.voice.speak("To whom?")
+                    to = self.listen_or_type()
+                if not to: return "Email cancelled."
+                to = EmailModule.normalize_recipient(to)
+                if not to: return "Invalid email address. Please check recipient email and try again."
+                sub = inline_sub
+                if not sub:
+                    self.voice.speak("Subject?")
+                    sub = self.listen_or_type()
+                if not sub: return "Email cancelled."
+                body = inline_body
+                if not body:
+                    self.voice.speak("What should I say?")
+                    body = self.listen_or_type()
+                if not body: return "Email cancelled."
+            if not self._ask_confirmation(f"Send email to {to} with subject '{sub}'?"):
+                resp = "Email cancelled."
+            else:
+                resp = self.email.send_email(to, sub, body) if all([to,sub,body]) else "Email cancelled."
 
         elif intent in ("send_whatsapp", "send_message"):
             if getattr(self, "_is_telegram_context", False) and self.telegram:
@@ -4345,7 +6689,13 @@ class JARVIS:
                 # If user spoke a name, try contacts.csv lookup
                 looked = self.contacts.lookup_phone(target)
                 phone = looked or target
-            resp = self.whatsapp.send_message(phone, msg) if phone and msg else "WhatsApp message cancelled."
+            if phone and msg:
+                if self._ask_confirmation(f"WhatsApp message send karu {target} pe?"):
+                    resp = self.whatsapp.send_message(phone, msg)
+                else:
+                    resp = "WhatsApp message cancelled."
+            else:
+                resp = "WhatsApp message cancelled."
 
         elif intent in ("whatsapp_read", "whatsapp_unread"):
             self.voice.speak("Reading WhatsApp screen text now.")
@@ -4373,12 +6723,22 @@ class JARVIS:
             resp = self.calendar.upcoming()
 
         elif intent == "add_event":
-            self.voice.speak("Event title?")
-            title = self.listen_or_type()
-            self.voice.speak("Date? For example, 2025-07-15.")
-            date  = self.listen_or_type()
-            self.voice.speak("Time?")
-            tstr  = self.listen_or_type() or "00:00"
+            if getattr(self, "_is_telegram_context", False) and self.telegram:
+                self.telegram.notify("Event title?")
+                title = self.telegram.wait_for_reply()
+                if not title: return "Event cancelled."
+                self.telegram.notify("Date? For example, 2026-05-24.")
+                date = self.telegram.wait_for_reply()
+                if not date: return "Event cancelled."
+                self.telegram.notify("Time?")
+                tstr = self.telegram.wait_for_reply() or "00:00"
+            else:
+                self.voice.speak("Event title?")
+                title = self.listen_or_type()
+                self.voice.speak("Date? For example, 2026-05-24.")
+                date  = self.listen_or_type()
+                self.voice.speak("Time?")
+                tstr  = self.listen_or_type() or "00:00"
             resp  = self.calendar.add(title, date, tstr) if title and date else "Event cancelled."
 
         elif intent == "open_calendar":
@@ -4388,17 +6748,31 @@ class JARVIS:
         # ── WEATHER ───────────────────────────────────
         elif intent == "weather":
             city = None
+            ka_match = re.search(r"\b([A-Za-z][A-Za-z\s.-]{1,60}?)\s+ka\s+weather\b", text, re.I)
+            if ka_match:
+                city = ka_match.group(1).strip()
             for prep in ["in ","for ","at "]:
-                if prep in lower:
+                if not city and prep in lower:
                     city = lower.split(prep,1)[-1].strip()
                     break
+            if city:
+                city = re.sub(r"\b(?:weather|batao|dikhao|forecast|ka|kya|hai)\b", " ", city, flags=re.I)
+                city = re.sub(r"\s+", " ", city).strip(" .,:;-")
             resp = self.weather.current(city)
 
         # ── NOTES ─────────────────────────────────────
         elif intent == "note_add":
-            self.voice.speak("What should I note?")
-            content = self.listen_or_type()
-            resp = self.notes.add(content) if content else "Note cancelled."
+            content = self._extract_inline_note(text)
+            if content:
+                resp = self.notes.add(content)
+            elif getattr(self, "_is_telegram_context", False) and self.telegram:
+                self.telegram.notify("What should I note?")
+                content = self.telegram.wait_for_reply()
+                resp = self.notes.add(content) if content else "Note cancelled."
+            else:
+                self.voice.speak("What should I note?")
+                content = self.listen_or_type()
+                resp = self.notes.add(content) if content else "Note cancelled."
 
         elif intent == "note_read":
             resp = self.notes.read()
@@ -4408,21 +6782,38 @@ class JARVIS:
 
         # ── REMINDER ──────────────────────────────────
         elif intent == "reminder":
-            self.voice.speak("What should I remind you about?")
-            rem = self.listen_or_type()
-            self.voice.speak("In how many minutes?")
-            mins_str = self.listen_or_type() or "5"
-            try:
-                mins = int(re.search(r"\d+", mins_str).group())
-            except:
-                mins = 5
-            resp = self.notes.set_reminder(rem, mins, lambda m: self.voice.speak(m))
+            rem, mins = self._extract_inline_reminder(text)
+            if rem and mins:
+                resp = self.notes.set_reminder(rem, mins, lambda m: self.voice.speak(m))
+            elif getattr(self, "_is_telegram_context", False) and self.telegram:
+                self.telegram.notify("What should I remind you about?")
+                rem = self.telegram.wait_for_reply()
+                if not rem: return "Reminder cancelled."
+                self.telegram.notify("In how many minutes?")
+                mins_str = self.telegram.wait_for_reply() or "5"
+                try:
+                    mins = int(re.search(r"\d+", mins_str).group())
+                except:
+                    mins = 5
+                resp = self.notes.set_reminder(rem, mins, lambda m: self.voice.speak(m))
+            else:
+                self.voice.speak("What should I remind you about?")
+                rem = self.listen_or_type()
+                self.voice.speak("In how many minutes?")
+                mins_str = self.listen_or_type() or "5"
+                try:
+                    mins = int(re.search(r"\d+", mins_str).group())
+                except:
+                    mins = 5
+                resp = self.notes.set_reminder(rem, mins, lambda m: self.voice.speak(m))
 
         # ── NEWS ──────────────────────────────────────
         elif intent == "news":
             query = None
+            if re.search(r"\bai\b", lower):
+                query = "artificial intelligence"
             for kw in ["about ","on ","regarding "]:
-                if kw in lower:
+                if not query and kw in lower:
                     query = lower.split(kw,1)[-1].strip()
                     break
             resp = self.news.headlines(query)
@@ -4460,6 +6851,8 @@ class JARVIS:
         elif intent == "camera_photo":
             self.voice.speak("Capturing photo, hold still.")
             ok, result = self.camera.capture_photo()
+            if ok and getattr(self, "_is_telegram_context", False):
+                self._telegram_file_to_send = (result, "Webcam photo captured by JARVIS")
             resp = f"Photo saved at {result}." if ok else result
 
         # ── CAMERA — VIDEO ────────────────────────────
@@ -4468,6 +6861,8 @@ class JARVIS:
             secs = int(nums[0]) if nums else 10
             self.voice.speak(f"Recording {secs} second video.")
             ok, result = self.camera.record_video(secs)
+            if ok and getattr(self, "_is_telegram_context", False):
+                self._telegram_file_to_send = (result, f"{secs} second webcam video captured by JARVIS")
             resp = f"Video saved at {result}." if ok else result
 
         # ── CAMERA — LIVE FEED ────────────────────────
@@ -4517,9 +6912,11 @@ class JARVIS:
 
         # ── WEB SEARCH ────────────────────────────────
         elif intent == "web_search":
-            query = re.sub(r"\b(search for|google|look up|search online|find online)\b","",text,flags=re.I).strip()
+            query = re.sub(r"\b(search for|google|look up|search online|find online|search|karo|karna|pe|par|dikhao|batao)\b"," ",text,flags=re.I).strip()
+            query = re.sub(r"\s+", " ", query).strip(" .,:;-")
             if query:
-                webbrowser.open(f"https://www.google.com/search?q={query}")
+                q = requests.utils.quote(query) if requests else query.replace(" ", "+")
+                webbrowser.open(f"https://www.google.com/search?q={q}")
                 resp = f"Searching Google for '{query}'."
             else:
                 resp = "What should I search for?"
@@ -4528,6 +6925,12 @@ class JARVIS:
         elif intent == "clear_chat":
             self.ai.reset()
             resp = f"Conversation memory cleared, {self.name}. Fresh start."
+
+        elif intent == "self_knowledge":
+            resp = self._handle_self_knowledge_command(text, force_rebuild=True)
+
+        elif intent == "self_improvement":
+            resp = self._handle_self_improvement_command(text, force_queue=True)
 
         # ── JOKE ──────────────────────────────────────
         elif intent == "joke":

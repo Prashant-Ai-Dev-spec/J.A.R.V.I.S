@@ -1,20 +1,65 @@
+version: '3.8'
+
 services:
   web:
     build: .
+    image: jarvis_web:latest
+    env_file: .env
     ports:
       - "8000:8000"
     volumes:
       - .:/app
+    environment:
+      - DATABASE_URL=postgresql://jarvis:jarvis@db:5432/jarvis
+      - REDIS_URL=redis://redis:6379/0
+      - BASE_URL=http://localhost:8000
+      - ADMIN_API_KEY=IypQ0dM3r9msgnEHCF5D4VXz7kWuLhAP
+    depends_on:
+      - db
+      - redis
+      - coturn
+    restart: unless-stopped
+
   yjs:
-    build: ./yjs_server
+    build:
+      context: ./yjs_server
+      dockerfile: Dockerfile
     ports:
       - "1234:1234"
+
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvis
+      POSTGRES_DB: jarvis
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  coturn:
+    image: instrumentisto/coturn
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      - "5349:5349/udp"
+    environment:
+      - TURN_PORT=3478
+      - TURN_EXTERNAL_IP=${TURN_EXTERNAL_IP}
+    command: ["--no-loopback-peers", "--no-multicast-peers", "--lt-cred-mech", "--realm=jarvis", "--user=jarvis:turnpassword", "--external-ip=${TURN_EXTERNAL_IP}", "--listening-port=3478"]
+    restart: unless-stopped
+
+volumes:
+  db_data:

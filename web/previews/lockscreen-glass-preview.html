@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.A.R.V.I.S. Glass Lockscreen Preview</title>
+  <link rel="stylesheet" href="./glass-lockscreen.css?v=preview-20260523">
+  <style>
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #070a12;
+      overflow: hidden;
+    }
+
+    .preview-toolbar {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      z-index: 12000;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      transform: translateX(-50%);
+      padding: 8px 10px;
+      border: 1px solid rgba(0, 238, 255, .2);
+      border-radius: 999px;
+      background: rgba(3, 8, 16, .72);
+      box-shadow: 0 0 30px rgba(0, 238, 255, .12);
+      backdrop-filter: blur(18px);
+      font: 500 12px "IBM Plex Mono", monospace;
+      color: rgba(230, 240, 255, .84);
+    }
+
+    .preview-toolbar a,
+    .preview-toolbar button {
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, .045);
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .preview-toolbar a:hover,
+    .preview-toolbar button:hover {
+      border-color: rgba(0, 238, 255, .45);
+      color: #0ef;
+    }
+
+    .preview-note {
+      opacity: .62;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-toolbar">
+    <span class="preview-note">Glass lockscreen preview</span>
+    <button id="preview-type" type="button">Type Demo</button>
+    <button id="preview-clear" type="button">Clear</button>
+    <a href="../index.html?skipIntro=1">Back to JARVIS</a>
+  </div>
+
+  <main id="preview-root"></main>
+
+  <script>
+    const root = document.getElementById("preview-root");
+
+    fetch("./new_lockscreen_glass.html?v=preview-20260523")
+      .then(response => response.text())
+      .then(html => {
+        root.innerHTML = html;
+        wirePreview();
+      })
+      .catch(error => {
+        root.innerHTML = `<pre style="color:#ff4d6a;padding:40px">Preview load failed: ${error}</pre>`;
+      });
+
+    function wirePreview() {
+      let dots = 0;
+      const pass = document.getElementById("pass-display");
+      const status = document.getElementById("nlk-status-text");
+      const bio = document.getElementById("bio-scan-trigger");
+      const clear = document.getElementById("key-del");
+      const enter = document.getElementById("key-enter");
+
+      function render() {
+        if (pass) pass.textContent = dots ? "•".repeat(dots) : "••••••••";
+        if (status) status.textContent = dots ? `${dots} GLYPHS CAPTURED` : "AWAITING AUTHORIZATION";
+      }
+
+      function pulse(text) {
+        if (status) status.textContent = text;
+      }
+
+      document.getElementById("preview-type")?.addEventListener("click", () => {
+        dots = Math.min(12, dots + 1);
+        render();
+      });
+
+      document.getElementById("preview-clear")?.addEventListener("click", () => {
+        dots = 0;
+        render();
+      });
+
+      clear?.addEventListener("click", () => {
+        dots = 0;
+        render();
+      });
+
+      enter?.addEventListener("click", () => {
+        pulse("VERIFYING OVERRIDE CODE");
+        setTimeout(() => pulse("PREVIEW MODE - ACCESS SIMULATED"), 650);
+      });
+
+      bio?.addEventListener("click", () => {
+        bio.classList.add("scanning");
+        pulse("BIOMETRIC SCAN IN PROGRESS");
+        setTimeout(() => {
+          bio.classList.remove("scanning");
+          pulse("BIOMETRIC SIGNATURE CONFIRMED");
+        }, 1200);
+      });
+
+      render();
+    }
+  </script>
+</body>
+</html>

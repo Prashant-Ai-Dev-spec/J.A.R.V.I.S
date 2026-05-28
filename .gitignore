@@ -9,17 +9,29 @@ jarvis_ai_memory.json
 jarvis_notes.json
 jarvis_reminders.json
 jarvis_events.json
+jarvis_mobile_settings.json
 PyWhatKit_DB.txt
 owner_faces/
 jarvis_photos/
+jarvisphotos/
+uploads/
+jarvis_generated/
+*.log
+jarvis-whatsapp/node_modules/
+jarvis-whatsapp/.wwebjs_cache/
+jarvis-whatsapp/.wwebjs_auth/
 
 # Build outputs
 build/
 dist/
 *.spec.bak
+mobile/android/.gradle/
+mobile/android/.idea/
 mobile/android/.buildozer/
 mobile/android/.buildozer-venv/
+mobile/android/app/build/
 mobile/android/bin/
+mobile/android/local.properties
 
 # Python
 __pycache__/
@@ -35,8 +47,14 @@ telemetry.log
 backend/dispatch/dispatch.db
 backend/dispatch/dispatch.db-*
 backend/dispatch/tasks.json
+backend/agent_approvals.json
+backend/agent_kill_switch.json
+backend/agent_tasks.json
+backend/integrations/tokens.json
+backend/integrations/token_key.key
 backend/tests/e2e_notepad_test.txt
 backend/tests/tmp_*.xlsx
+scripts/backend/certs/
 debug_sql.py
 
 # OS/editor

@@ -14,6 +14,7 @@ PyAudio>=0.2.14          # if this fails: pipwin install pyaudio
 
 # Voice Output
 pyttsx3>=2.90
+edge-tts>=7.2.8
 
 # System Monitoring
 psutil>=5.9.0
@@ -27,12 +28,20 @@ requests>=2.31.0
 # Screenshot
 pyautogui>=0.9.54
 Pillow>=10.0.0
+mss>=9.0.1
 
 # Audio metering (waveform HUD)
 sounddevice>=0.4.6
 
 # Clipboard
 pyperclip>=1.8.2
+
+# Windows notification secretary
+winrt-Windows.ApplicationModel>=3.2.1
+winrt-Windows.Foundation>=3.2.1
+winrt-Windows.Foundation.Collections>=3.2.1
+winrt-Windows.UI.Notifications>=3.2.1
+pywinauto>=0.6.8
 
 # Offline wake word + offline speech recognition + WhatsApp
 numpy>=1.26.0
@@ -57,3 +66,12 @@ python-multipart>=0.0.6
 sqlalchemy>=2.0.0
 cryptography>=41.0.0
 pytest
+
+# Web browsing automation
+playwright>=1.40.0
+
+# Telegram personal-account secretary
+telethon>=1.36.0
+
+# Generated document attachments
+python-docx>=1.1.0

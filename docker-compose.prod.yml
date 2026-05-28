@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: jarvis_web:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://jarvis:jarvis@db:5432/jarvis
+      - REDIS_URL=redis://redis:6379/0
+      - BASE_URL=https://yourdomain.com
+    depends_on:
+      - db
+      - redis
+      - coturn
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/certs:/etc/letsencrypt/live:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+
+  db:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvis
+      POSTGRES_DB: jarvis
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  coturn:
+    image: instrumentisto/coturn
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      - "5349:5349/udp"
+    command: ["--no-loopback-peers", "--no-multicast-peers", "--lt-cred-mech", "--realm=jarvis", "--user=jarvis:turnpassword", "--listening-port=3478"]
+    environment:
+      - TURN_EXTERNAL_IP=YOUR_PUBLIC_IP
+    restart: unless-stopped
+
+volumes:
+  db_data:

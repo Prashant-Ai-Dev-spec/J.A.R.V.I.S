@@ -212,19 +212,31 @@ def _take_screenshot() -> str:
     try:
         screenshot = pyautogui.screenshot()
         # Resize for efficiency — keep context small for free models
-        max_dim = 1024
+        # Save screenshot to a local jarvis_photos folder and return the local path to avoid huge base64 transfer
+        from pathlib import Path
+        import os
+        photos_dir = Path(__file__).resolve().parent.parent / "jarvis_photos"
+        photos_dir.mkdir(parents=True, exist_ok=True)
+
+        max_dim = 800
         w, h = screenshot.size
         if w > max_dim or h > max_dim:
             scale = max_dim / max(w, h)
             new_w, new_h = int(w * scale), int(h * scale)
             screenshot = screenshot.resize((new_w, new_h))
 
-        buf = io.BytesIO()
-        # Use JPEG with moderate quality to keep base64 size small
         screenshot = screenshot.convert("RGB")
-        screenshot.save(buf, format="JPEG", quality=55)
-        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        data_url = f"data:image/jpeg;base64,{b64}"
-        return f"[SCREENSHOT DATA BASE64]: {data_url}"
+        fname = f"screenshot_{int(time.time())}.jpg"
+        path = photos_dir / fname
+        try:
+            screenshot.save(str(path), format="JPEG", quality=50)
+            return f"[SCREENSHOT_PATH]: {str(path)}"
+        except Exception:
+            # Fallback to small base64 if filesystem save fails
+            buf = io.BytesIO()
+            screenshot.save(buf, format="JPEG", quality=30)
+            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            data_url = f"data:image/jpeg;base64,{b64}"
+            return f"[SCREENSHOT DATA BASE64]: {data_url}  ..."
     except Exception as e:
         return f"Screenshot error: {e}"

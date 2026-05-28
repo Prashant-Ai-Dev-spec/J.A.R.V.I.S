@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J.A.R.V.I.S. - Mission Control</title>
+  <!-- Google Fonts for Sci-Fi Aesthetics -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&family=Exo+2:ital,wght@0,300;0,600;0,800;1,400&family=JetBrains+Mono:wght@300;500;700&family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=glass-lock-20260523">
+  <link rel="stylesheet" href="jarvis-upgrade.css?v=glass-lock-20260523">
+</head>
+<body>
+
+  <!-- JARVIS Premium Minimal Boot Sequence -->
+  <div id="boot-sequence-overlay" class="boot-overlay" style="display: none;">
+    
+    <!-- SCENE 1: Deep Black Void -->
+    <div id="boot-scene-1" class="boot-scene hidden">
+      <div class="boot-premium-text-container">
+        <div id="boot-init-text" class="boot-cinematic-title">COGNITIVE SYSTEMS ONLINE</div>
+      </div>
+    </div>
+
+    <!-- SCENE 2: Spatial Telemetry -->
+    <div id="boot-scene-2" class="boot-scene hidden">
+      <div class="boot-spatial-container">
+        <!-- Minimal telemetry ring -->
+        <div class="boot-telemetry-ring"></div>
+        <div class="boot-telemetry-ring inner-ring"></div>
+        
+        <!-- Abstract neural activity -->
+        <div class="boot-neural-grid">
+          <div class="boot-node n1"></div>
+          <div class="boot-node n2"></div>
+          <div class="boot-node n3"></div>
+          <div class="boot-node n4"></div>
+          <div class="boot-connection"></div>
+        </div>
+      </div>
+      <div class="boot-status-text">
+        <div class="boot-sync-text">NEURAL SYNCHRONIZATION ACTIVE</div>
+        <div class="boot-await-text" style="opacity: 0; animation: fadeUpCinematic 2s ease forwards 2s;">AWAITING USER COMMAND</div>
+      </div>
+    </div>
+
+    <!-- SCENE 3: The Awakening -->
+    <div id="boot-scene-3" class="boot-scene hidden">
+      <div class="boot-awakening-container">
+        <!-- Soft Cyan Breathing Waveform -->
+        <div class="boot-cyan-waveform">
+          <div class="cyan-bar"></div>
+          <div class="cyan-bar"></div>
+          <div class="cyan-bar"></div>
+          <div class="cyan-bar"></div>
+          <div class="cyan-bar"></div>
+        </div>
+        <div class="boot-assist-text">HOW MAY I ASSIST YOU?</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Futuristic Holographic Background Grids & Scanners -->
+  <div class="hud-scanner"></div>
+  <div class="hud-grid-overlay"></div>
+  
+  <!-- Global Screen FX (Vignette, Bloom, Chromatic Aberration) -->
+  <div class="screen-fx-overlay pointer-events-none"></div>
+
+  <!-- Ambient Moving Background Systems -->
+  <div class="ambient-system-overlay pointer-events-none">
+    <div class="ambient-hud-ring ring-fast"></div>
+    <div class="ambient-hud-ring ring-slow"></div>
+    <div class="ambient-fake-logs">
+      <div class="log-scroll-fast">
+        <!-- populated by css or js -->
+        > 0x8F9A SYSTEM RE-ROUTE<br>
+        > ALLOCATING NEURAL THREADS<br>
+        > PING: 12ms TO ORBITAL SATELLITE<br>
+        > CPU TEMP: 34°C - OPTIMAL<br>
+        > SYNC: OK
+      </div>
+    </div>
+    <div class="ambient-particle-dust"></div>
+  </div>
+
+  <!-- Security Access — Glassmorphic Secure Portal -->
+  <div id="lockscreen" class="lockscreen-overlay neo-lockscreen">
+    <div class="nlk-corner nlk-tl"></div>
+    <div class="nlk-corner nlk-tr"></div>
+    <div class="nlk-corner nlk-bl"></div>
+    <div class="nlk-corner nlk-br"></div>
+
+    <div class="nlk-scanline"></div>
+
+    <div class="nlk-side nlk-side-left">
+      <span>SYS::LOCK</span>
+      <span>AUTH::PEND</span>
+      <span>TIER::3</span>
+      <span>ENC::256</span>
+    </div>
+    <div class="nlk-side nlk-side-right">
+      <span>NODE::01</span>
+      <span>VER::5.0</span>
+      <span>CORE::OK</span>
+      <span>NET::UP</span>
+    </div>
+
+    <div class="nlk-center">
+      <div class="nlk-glass-card">
+        <button class="nlk-rings" id="bio-scan-trigger" type="button" aria-label="Biometric scan">
+          <div class="nlk-ring nlk-r1"></div>
+          <div class="nlk-ring nlk-r2"></div>
+          <div class="nlk-ring nlk-r3"></div>
+          <div class="nlk-ring-core" aria-hidden="true"></div>
+          <span class="nlk-bio-hint">BIOMETRIC SCAN</span>
+        </button>
+
+        <div class="nlk-header">
+          <div class="nlk-brand-title">J.A.R.V.I.S.</div>
+          <div class="nlk-brand-sub">Stark Industries · Secure Access Portal</div>
+        </div>
+
+        <div class="nlk-divider">
+          <span class="nlk-div-line"></span>
+          <span class="nlk-div-label">NEURAL AUTH REQUIRED</span>
+          <span class="nlk-div-line"></span>
+        </div>
+
+        <div class="nlk-input-wrap">
+          <span class="nlk-input-label">OVERRIDE CODE</span>
+          <div class="nlk-input-row">
+            <div class="nlk-pass-dots" id="pass-display">••••••••</div>
+            <div class="nlk-input-sep"></div>
+            <button class="nlk-enter-icon" id="key-enter" type="button" aria-label="Enter">↵</button>
+          </div>
+          <div class="nlk-type-hint" style="margin-top:10px">
+            Type your code &nbsp;<kbd>↵ ENTER</kbd>&nbsp; to authenticate
+          </div>
+        </div>
+
+        <div class="nlk-actions">
+          <button id="key-del" class="nlk-act-btn nlk-del-btn" type="button">⌫ &nbsp;Clear</button>
+          <button class="nlk-act-btn nlk-submit-btn" type="button" onclick="document.getElementById('key-enter').click()">
+            Access &nbsp;→
+          </button>
+        </div>
+
+        <div class="nlk-status-bar">
+          <span class="nlk-status-dot"></span>
+          <span id="nlk-status-text">AWAITING AUTHORIZATION</span>
+        </div>
+      </div>
+
+      <div class="nlk-meta">
+        <span>STARK INDUSTRIES</span>
+        <span class="nlk-meta-sep">·</span>
+        <span>PERSONAL OS v5.0</span>
+        <span class="nlk-meta-sep">·</span>
+        <span>CLASSIFIED</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Legacy quantum lockscreen retained hidden for rollback -->
+  <div id="legacy-lockscreen" class="lockscreen-overlay neo-lockscreen quantum-lockscreen" style="display:none" aria-hidden="true">
+    <div class="ql-orbital-bg" aria-hidden="true">
+      <span class="ql-orbit ql-o1"></span>
+      <span class="ql-orbit ql-o2"></span>
+      <span class="ql-orbit ql-o3"></span>
+      <span class="ql-sweep"></span>
+    </div>
+
+    <div class="ql-shell">
+      <div class="ql-corner ql-tl"></div>
+      <div class="ql-corner ql-tr"></div>
+      <div class="ql-corner ql-bl"></div>
+      <div class="ql-corner ql-br"></div>
+
+      <aside class="ql-telemetry ql-left">
+        <span>SYS::LOCK</span>
+        <span>AUTH::PENDING</span>
+        <span>ENCRYPTION::AES-256</span>
+        <span>BIOMETRIC::READY</span>
+        <span>UPLINK::LOCAL</span>
+      </aside>
+
+      <aside class="ql-telemetry ql-right">
+        <span>NODE::01</span>
+        <span>VAULT::SEALED</span>
+        <span>THREAT::NONE</span>
+        <span>CORE::STABLE</span>
+        <span>SESSION::PRIVATE</span>
+      </aside>
+
+      <section class="ql-console" aria-label="JARVIS secure access console">
+        <div class="ql-brand-lockup">
+          <div class="ql-kicker">STARK INDUSTRIES // PERSONAL OPERATING SYSTEM</div>
+          <div class="ql-title">J.A.R.V.I.S.</div>
+          <div class="ql-subtitle">SYSTEM ACCESS RESTRICTED</div>
+        </div>
+
+        <button class="ql-biometric" id="bio-scan-trigger" type="button" aria-label="Start biometric scan">
+          <span class="ql-bio-ring ql-bio-r1"></span>
+          <span class="ql-bio-ring ql-bio-r2"></span>
+          <span class="ql-bio-ring ql-bio-r3"></span>
+          <span class="ql-bio-core">
+            <span class="ql-bio-shard"></span>
+          </span>
+          <span class="ql-bio-text">TOUCH FOR BIOMETRIC SCAN</span>
+        </button>
+
+        <div class="ql-pass-vault" aria-label="Security override code">
+          <span class="ql-vault-label">OVERRIDE CODE</span>
+          <div class="ql-pass-dots" id="pass-display">••••••••</div>
+          <span class="ql-vault-scan"></span>
+        </div>
+
+        <div class="ql-hint-row">
+          <span id="nlk-status-text">AWAITING AUTHORIZATION</span>
+          <kbd>ENTER</kbd>
+        </div>
+
+        <div class="virtual-keyboard ql-key-matrix" id="virtual-keyboard" aria-label="Virtual passkey keyboard">
+          <div class="kb-row">
+            <button class="key-btn" data-key="1" data-val="1">1</button>
+            <button class="key-btn" data-key="2" data-val="2">2</button>
+            <button class="key-btn" data-key="3" data-val="3">3</button>
+            <button class="key-btn" data-key="4" data-val="4">4</button>
+            <button class="key-btn" data-key="5" data-val="5">5</button>
+            <button class="key-btn" data-key="6" data-val="6">6</button>
+            <button class="key-btn" data-key="7" data-val="7">7</button>
+            <button class="key-btn" data-key="8" data-val="8">8</button>
+            <button class="key-btn" data-key="9" data-val="9">9</button>
+            <button class="key-btn" data-key="0" data-val="0">0</button>
+          </div>
+          <div class="kb-row">
+            <button class="key-btn" data-key="q" data-val="q">Q</button>
+            <button class="key-btn" data-key="w" data-val="w">W</button>
+            <button class="key-btn" data-key="e" data-val="e">E</button>
+            <button class="key-btn" data-key="r" data-val="r">R</button>
+            <button class="key-btn" data-key="t" data-val="t">T</button>
+            <button class="key-btn" data-key="y" data-val="y">Y</button>
+            <button class="key-btn" data-key="u" data-val="u">U</button>
+            <button class="key-btn" data-key="i" data-val="i">I</button>
+            <button class="key-btn" data-key="o" data-val="o">O</button>
+            <button class="key-btn" data-key="p" data-val="p">P</button>
+          </div>
+          <div class="kb-row">
+            <button class="key-btn" data-key="a" data-val="a">A</button>
+            <button class="key-btn" data-key="s" data-val="s">S</button>
+            <button class="key-btn" data-key="d" data-val="d">D</button>
+            <button class="key-btn" data-key="f" data-val="f">F</button>
+            <button class="key-btn" data-key="g" data-val="g">G</button>
+            <button class="key-btn" data-key="h" data-val="h">H</button>
+            <button class="key-btn" data-key="j" data-val="j">J</button>
+            <button class="key-btn" data-key="k" data-val="k">K</button>
+            <button class="key-btn" data-key="l" data-val="l">L</button>
+          </div>
+          <div class="kb-row ql-bottom-row">
+            <button class="key-btn" data-key="z" data-val="z">Z</button>
+            <button class="key-btn" data-key="x" data-val="x">X</button>
+            <button class="key-btn" data-key="c" data-val="c">C</button>
+            <button class="key-btn" data-key="v" data-val="v">V</button>
+            <button class="key-btn" data-key="b" data-val="b">B</button>
+            <button class="key-btn" data-key="n" data-val="n">N</button>
+            <button class="key-btn" data-key="m" data-val="m">M</button>
+            <button id="key-del" class="key-btn ql-control ql-clear" data-key="Backspace" type="button">CLEAR</button>
+            <button id="key-enter" class="key-btn ql-control ql-access" data-key="Enter" type="button">ACCESS</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+
+    <!-- Primary HUD Dashboard -->
+  <div class="hud-container hidden" id="main-hud">
+    
+    <!-- Top Status Header Banner -->
+    <header class="hud-header glass-panel">
+      <div class="header-left">
+        <div class="header-logo">J.A.R.V.I.S. <span class="header-sub">MISSION CONTROL</span></div>
+        <div class="security-badge pulse-purple">ONLINE</div>
+      </div>
+      
+      <div class="header-center">
+        <div class="hud-title-banner" id="ready-status">Ready for voice, camera, and file-aware chat.</div>
+        <div class="sys-pulse-indicator">
+          <span class="ping-latency" id="ping-text">LATENCY: --ms</span>
+          <span class="net-status secure" id="net-status-text">UPLINK: ACTIVE</span>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <div class="weather-brief" id="clock-time">00:00:00 PM</div>
+        <div class="time-block">
+          <div class="hud-clock" id="eco-status">ECO</div>
+          <div class="hud-date" id="date-display">Wednesday, 20 May 2026</div>
+        </div>
+        <div class="mode-toggles">
+          <button class="mode-btn active" id="btn-eco">ECO</button>
+          <button class="mode-btn" id="btn-quiet">QUIET</button>
+          <button class="mode-btn" id="btn-default">DEFAULT</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Glassmorphic Tab Navigation Bar -->
+    <nav class="hud-nav-tabs glass-panel">
+      <button class="nav-tab active" data-tab="mission">MISSION CORE</button>
+      <button class="nav-tab" data-tab="analytics">ANALYTICS</button>
+      <button class="nav-tab" data-tab="command">COMMAND CENTER</button>
+      <button class="nav-tab" data-tab="security">SECURITY</button>
+      <button class="nav-tab" data-tab="settings">SETTINGS</button>
+    </nav>
+
+    <!-- Main Dynamic 3-Column Layout -->
+    <main class="hud-grid">
+      
+      <!-- Left Column: Diagnostic & System Telemetry (Dynamic Tab Content) -->
+      <section class="hud-col left-col">
+        
+        <!-- Tab 1: MISSION CORE Left -->
+        <div class="tab-pane active" id="pane-left-mission">
+          <!-- Camera Widget -->
+          <div class="glass-panel camera-card">
+            <div class="panel-header">
+              <span class="panel-title">CAMERA</span>
+              <span class="panel-subtitle">led live feed with face tracking and Matrix HUD</span>
+            </div>
+            <div class="camera-content">
+              <div class="camera-preview-container">
+                <video id="webcam-video" autoplay playsinline muted style="display: none;"></video>
+                <canvas id="camera-canvas" width="320" height="240"></canvas>
+                <div class="camera-status-overlay" id="camera-status-overlay">Camera offline</div>
+              </div>
+              <div class="camera-summary-box">
+                <span class="hud-status-text" id="camera-summary">Camera offline.</span>
+                <span class="hud-status-text secondary" id="camera-lock-status">Face lock idle.</span>
+              </div>
+              <div class="camera-controls-grid">
+                <button class="hud-btn" id="btn-toggle-cam">START CAM</button>
+                <button class="hud-btn" id="btn-cam-snap" disabled>SNAP</button>
+                <button class="hud-btn" id="btn-cam-ref" disabled>USE AS REF</button>
+              </div>
+              <button class="hud-btn primary full-width-btn" id="btn-cam-analyze" style="margin-top: 5px;" disabled>ANALYZE LIVE FRAME</button>
+              
+              <div class="camera-options-row">
+                <label class="hud-checkbox-label">
+                  <input type="checkbox" id="cam-face-tracking" checked />
+                  <span>FACE TRACKING</span>
+                </label>
+                <label class="hud-checkbox-label">
+                  <input type="checkbox" id="cam-hud-overlay" checked />
+                  <span>MATRIX HUD</span>
+                </label>
+              </div>
+              
+              <!-- Style Selector Bar -->
+              <div class="camera-styles-bar">
+                <button class="style-btn active" data-style="mark50">MARK 50</button>
+                <button class="style-btn" data-style="thermal">THERMAL</button>
+                <button class="style-btn" data-style="tron">TRON</button>
+                <button class="style-btn" data-style="predator">PREDATOR</button>
+                <button class="style-btn" data-style="neural">NEURAL</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Weather Widget -->
+          <div class="glass-panel weather-card">
+            <div class="panel-header">
+              <span class="panel-title">WEATHER</span>
+              <span class="panel-subtitle">d from your configured OpenWeather!</span>
+              <button class="hud-btn-mini" id="weather-refresh-btn">REFRESH</button>
+            </div>
+            <div class="weather-content">
+              <div class="weather-temp-row">
+                <span class="weather-temp" id="weather-temp">39°</span>
+                <span class="weather-desc" id="weather-desc">Muzaffarpur, Bihar, IN: 39°C, overcast clouds, feels like 41°C, humidity 28%.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Satellite News Widget -->
+          <div class="glass-panel news-card">
+            <div class="panel-header">
+              <span class="panel-title">NEWS</span>
+              <span class="panel-subtitle">s - NewsAPI (if key set) or Google News</span>
+              <button class="hud-btn-mini" id="news-refresh-btn">REFRESH</button>
+            </div>
+            <div class="news-list-container">
+              <div class="news-list-title">Top headlines</div>
+              <div class="news-list" id="news-brief-feed">
+                <div class="news-ticker-item">Retrieving satellite news feed...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: ANALYTICS Left -->
+        <div class="tab-pane" id="pane-left-analytics">
+          <div class="glass-panel realtime-system-card">
+            <div class="panel-header">
+              <span class="panel-title">REAL-TIME SYSTEM STATS</span>
+              <span class="panel-subtitle">Live psutil/GPUtil telemetry - refresh 2 seconds</span>
+            </div>
+            <div class="realtime-stats-content">
+              <div class="live-meter-grid">
+                <div class="live-meter cyan">
+                  <div class="live-meter-meta">
+                    <span>CPU</span>
+                    <strong id="sysstat-cpu-value">--%</strong>
+                  </div>
+                  <div class="live-meter-track"><i id="sysstat-cpu-bar"></i></div>
+                  <small id="sysstat-cpu-temp">Temp: --°C</small>
+                </div>
+                <div class="live-meter cyan">
+                  <div class="live-meter-meta">
+                    <span>RAM</span>
+                    <strong id="sysstat-ram-value">--%</strong>
+                  </div>
+                  <div class="live-meter-track"><i id="sysstat-ram-bar"></i></div>
+                  <small id="sysstat-ram-detail">-- / -- GB</small>
+                </div>
+                <div class="live-meter gold">
+                  <div class="live-meter-meta">
+                    <span>DISK</span>
+                    <strong id="sysstat-disk-value">--%</strong>
+                  </div>
+                  <div class="live-meter-track"><i id="sysstat-disk-bar"></i></div>
+                  <small id="sysstat-disk-detail">-- / -- GB</small>
+                </div>
+                <div class="live-meter cyan">
+                  <div class="live-meter-meta">
+                    <span>GPU</span>
+                    <strong id="sysstat-gpu-value">--%</strong>
+                  </div>
+                  <div class="live-meter-track"><i id="sysstat-gpu-bar"></i></div>
+                  <small id="sysstat-gpu-temp">Temp: --°C</small>
+                </div>
+                <div class="live-meter gold" id="sysstat-battery-meter">
+                  <div class="live-meter-meta">
+                    <span>BATTERY</span>
+                    <strong id="sysstat-battery-value">--%</strong>
+                  </div>
+                  <div class="live-meter-track"><i id="sysstat-battery-bar"></i></div>
+                  <small id="sysstat-battery-detail">Plugged: --</small>
+                </div>
+                <div class="live-meter green">
+                  <div class="live-meter-meta">
+                    <span>NETWORK</span>
+                    <strong id="sysstat-net-value">-- / -- Mbps</strong>
+                  </div>
+                  <div class="live-meter-track split"><i id="sysstat-net-down-bar"></i><b id="sysstat-net-up-bar"></b></div>
+                  <small id="sysstat-net-detail">Down: -- Mbps | Up: -- Mbps</small>
+                </div>
+              </div>
+              <div class="table-container system-procs">
+                <table class="hud-table system-process-table">
+                  <thead>
+                    <tr>
+                      <th>NAME</th>
+                      <th>CPU %</th>
+                      <th>RAM MB</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sysstat-process-body">
+                    <tr>
+                      <td colspan="3" class="table-empty">Open Analytics to start live polling.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="glass-panel analytics-metrics-card">
+            <div class="panel-header">
+              <span class="panel-title">LIVE CHARTS</span>
+              <span class="panel-subtitle">Last 60 seconds - updates every 2 seconds</span>
+            </div>
+            <div class="stat-gauge-group double-col">
+              <!-- CPU Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">CPU %</span>
+                  <span class="gauge-meta-val" id="analytics-cpu-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-cpu-chart" height="70"></canvas>
+                </div>
+              </div>
+              <!-- RAM Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">RAM %</span>
+                  <span class="gauge-meta-val" id="analytics-ram-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-ram-chart" height="70"></canvas>
+                </div>
+              </div>
+              <!-- Battery Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">BATTERY %</span>
+                  <span class="gauge-meta-val" id="analytics-battery-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-battery-chart" height="70"></canvas>
+                </div>
+              </div>
+              <!-- Disk IO Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">DISK IO KB/s</span>
+                  <span class="gauge-meta-val" id="analytics-disk-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-disk-chart" height="70"></canvas>
+                </div>
+              </div>
+              <!-- Network Down Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">NET DOWN KB/s</span>
+                  <span class="gauge-meta-val" id="analytics-net-down-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-net-down-chart" height="70"></canvas>
+                </div>
+              </div>
+              <!-- Network Up Gauge -->
+              <div class="gauge-card">
+                <div class="gauge-meta">
+                  <span class="gauge-label">NET UP KB/s</span>
+                  <span class="gauge-meta-val" id="analytics-net-up-val">0.0</span>
+                </div>
+                <div class="telemetry-chart-container">
+                  <canvas id="analytics-net-up-chart" height="70"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: COMMAND CENTER Left -->
+        <div class="tab-pane" id="pane-left-command">
+          <!-- Calendar Widget -->
+          <div class="glass-panel calendar-card">
+            <div class="panel-header">
+              <span class="panel-title">CALENDAR</span>
+              <span class="panel-subtitle">Today, upcoming, and add new events</span>
+              <button class="hud-btn-mini" id="calendar-refresh-btn">REFRESH</button>
+            </div>
+            <div class="calendar-content">
+              <div class="calendar-header-row">
+                <span class="calendar-month-title" id="calendar-month-year">May 2026</span>
+              </div>
+              <div class="calendar-weekdays">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+              <div class="calendar-days-grid" id="calendar-days-grid">
+                <!-- Javascript populated -->
+              </div>
+              <div class="calendar-events-brief" id="calendar-events-list">
+                <span class="empty-deck-msg">No events scheduled for today.</span>
+              </div>
+              <div class="calendar-add-event-row">
+                <div class="datetime-inputs">
+                  <input type="text" id="calendar-event-date" placeholder="2026-05-20" class="hud-input-mini" />
+                  <input type="text" id="calendar-event-time" placeholder="10:00" class="hud-input-mini" />
+                </div>
+                <button class="hud-btn primary" id="calendar-add-btn">ADD</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: SECURITY Left -->
+        <div class="tab-pane" id="pane-left-security">
+          <div class="glass-panel network-card">
+            <div class="panel-header">
+              <span class="panel-title">NETWORK INTELLIGENCE</span>
+              <span class="panel-subtitle">Public/local IP, ISP, connections, ping</span>
+            </div>
+            <div class="network-content">
+              <div class="security-telemetry-text" id="security-telemetry-box">
+                Loading network info...
+              </div>
+              <div class="table-container conns">
+                <table class="hud-table conns" id="connections-table">
+                  <thead>
+                    <tr>
+                      <th>PID</th>
+                      <th>LOCAL</th>
+                      <th>REMOTE</th>
+                      <th>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="connections-list-body">
+                    <tr>
+                      <td colspan="4" class="table-empty">Loading network connections...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="network-controls">
+                <button class="hud-btn" id="btn-ping-google">PING GOOGLE</button>
+                <button class="hud-btn" id="btn-refresh-security">REFRESH</button>
+                <button class="hud-btn" id="btn-port-scan">PORT SCAN</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: SETTINGS Left -->
+        <div class="tab-pane" id="pane-left-settings">
+          <!-- AI Configuration Widget -->
+          <div class="glass-panel settings-card">
+            <div class="panel-header">
+              <span class="panel-title">AI CONFIGURATION</span>
+              <span class="panel-subtitle">Keys, model, style</span>
+            </div>
+            <div class="settings-content form-layout">
+              <div class="form-group row">
+                <label for="cfg-openrouter">OpenRouter key</label>
+                <input type="password" id="cfg-openrouter" class="hud-input" placeholder="••••••••••••••••" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-groq">Groq key</label>
+                <input type="password" id="cfg-groq" class="hud-input" placeholder="••••••••••••••••" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-weather">OpenWeather key</label>
+                <input type="password" id="cfg-weather" class="hud-input" placeholder="••••••••••••••••" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-news">NewsAPI key (optional)</label>
+                <input type="password" id="cfg-news" class="hud-input" placeholder="••••••••••••••••" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-elevenlabs">ElevenLabs key</label>
+                <input type="password" id="cfg-elevenlabs" class="hud-input" placeholder="••••••••••••••••" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-model">Model</label>
+                <select id="cfg-model" class="hud-select">
+                  <!-- Javascript populated -->
+                </select>
+              </div>
+              <div class="form-group row">
+                <label for="cfg-style">Response style</label>
+                <select id="cfg-style" class="hud-select">
+                  <option value="Concise">Concise</option>
+                  <option value="Detailed">Detailed</option>
+                  <option value="Scientific">Scientific</option>
+                </select>
+              </div>
+              <div class="form-group row">
+                <label for="cfg-temp">Temperature</label>
+                <div class="slider-row">
+                  <input type="range" id="cfg-temp" min="0" max="1" step="0.05" class="hud-slider" />
+                  <span class="range-val" id="temp-val">0.70</span>
+                </div>
+              </div>
+              <div class="form-group checkbox-row">
+                <input type="checkbox" id="cfg-memory" />
+                <label for="cfg-memory">Conversation memory</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Camera Settings Widget -->
+          <div class="glass-panel camera-settings-card">
+            <div class="panel-header">
+              <span class="panel-title">CAMERA SETTINGS</span>
+              <span class="panel-subtitle">Index, HUD mode, toggles</span>
+            </div>
+            <div class="camera-settings-content form-layout">
+              <div class="form-group row">
+                <label for="cfg-camera-index">Camera index</label>
+                <input type="number" id="cfg-camera-index" value="0" class="hud-input index-num" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-hud-style">HUD style</label>
+                <select id="cfg-hud-style" class="hud-select">
+                  <option value="mark50">mark50</option>
+                  <option value="neon">neon</option>
+                  <option value="matrix">matrix</option>
+                </select>
+              </div>
+              <div class="form-group checkbox-row">
+                <input type="checkbox" id="cfg-face-tracking" />
+                <label for="cfg-face-tracking">Face tracking</label>
+              </div>
+              <div class="form-group checkbox-row">
+                <input type="checkbox" id="cfg-matrix-overlay" />
+                <label for="cfg-matrix-overlay">Matrix overlay</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Center Column: ChatGPT-Style Organic 3D Orb & Prompter (PERSISTENT) -->
+      <section class="hud-col center-col">
+        <div class="glass-panel main-core-card">
+          
+          <div class="center-banner-header">
+            <div class="core-state-badge" id="core-state-text">STANDBY</div>
+            <div class="hologram-coordinates" id="hologram-coords">SEC-A // X: 502 // Y: 911</div>
+          </div>
+          
+          <!-- ChatGPT Organic 3D Hologram Orb & framing brackets -->
+          <div class="core-hologram-container">
+            <!-- Architectural Sci-Fi HUD Brackets -->
+            <div class="hud-bracket top-left"></div>
+            <div class="hud-bracket top-right"></div>
+            <div class="hud-bracket bottom-left"></div>
+            <div class="hud-bracket bottom-right"></div>
+            
+            <canvas id="hologram-canvas" width="400" height="400"></canvas>
+            
+            <div class="hologram-lens"></div>
+            <div class="rotating-ring ring-1"></div>
+            <div class="rotating-ring ring-2"></div>
+            <div class="rotating-ring ring-3"></div>
+          </div>
+
+          <!-- Scrolling Prompt Terminal Logger -->
+          <div class="terminal-log-container" id="terminal-feed">
+            <div class="log-line sys">[SYSTEM] Boot sequence initialized...</div>
+            <div class="log-line sys">[SYSTEM] Holographic purple wave core active. J.A.R.V.I.S. operational.</div>
+          </div>
+
+          <!-- Live Input Prompt & Microphone Button -->
+          <div class="prompter-input-bar">
+            <div class="mic-btn-wrapper">
+              <button class="mic-toggle-btn" id="mic-btn" title="Toggle Voice Commands">
+                <svg class="mic-icon" viewBox="0 0 24 24">
+                  <path fill="#a855f7" d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M19,11C19,14.53 16.39,17.44 13,17.93V21H11V17.93C7.61,17.44 5,14.53 5,11H7A5,5 0 0,0 12,16A5,5 0 0,0 17,11H19Z" />
+                </svg>
+                <div class="mic-pulse-ring"></div>
+              </button>
+            </div>
+            
+            <div class="text-input-wrapper">
+              <input type="text" id="prompter-input" autocomplete="off" placeholder="Enter a tactical command..." />
+              <button class="send-btn" id="send-command-btn">
+                <svg viewBox="0 0 24 24">
+                  <path fill="#a855f7" d="M2,21L23,12L2,3V10L17,12L2,14V21Z" stroke-width="1" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Live Audio Visualizer Overlay (shown when listening) -->
+          <div class="audio-wave-visualizer-container hidden" id="audio-vis-container">
+            <canvas id="mic-wave-canvas" height="50"></canvas>
+            <span class="listening-label">LISTENING FOR VOICE INPUT...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Status Feeds & Live Ticker (Dynamic Tab Content) -->
+      <section class="hud-col right-col">
+        
+        <!-- Tab 1: MISSION CORE Right -->
+        <div class="tab-pane active" id="pane-right-mission">
+          <!-- Movement Detection Radar Widget -->
+          <div class="glass-panel radar-card">
+            <div class="panel-header">
+              <span class="panel-title">LIVE ACTIVITY</span>
+              <span class="panel-subtitle">Mission log with timestamps</span>
+            </div>
+            <div class="radar-content">
+              <div class="radar-scan-box">
+                <span class="radar-grid-title" id="radar-title">RADAR ONLINE</span>
+                <canvas id="radar-canvas" width="160" height="160"></canvas>
+              </div>
+              <div class="radar-label">Radar standby. Start camera to scan movement.</div>
+              <div class="radar-buttons">
+                <button class="hud-btn-mini" id="radar-reset-btn">RESET RADAR</button>
+                <button class="hud-btn-mini primary" id="radar-snap-btn">SNAP + ANALYZE</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Context Attached Files Deck -->
+          <div class="glass-panel context-card">
+            <div class="panel-header">
+              <span class="panel-title">CONTEXT FILES</span>
+              <span class="panel-subtitle">Attach notes, code, configs, or folders and ask about them directly</span>
+            </div>
+            <div class="context-content">
+              <div class="files-deck" id="context-files-deck">
+                <span class="empty-deck-msg">No files attached.</span>
+              </div>
+              <div class="context-controls">
+                <button class="hud-btn-mini" id="btn-add-files">ADD FILES</button>
+                <button class="hud-btn-mini" id="btn-add-folder">ADD FOLDER</button>
+                <button class="hud-btn-mini" id="btn-project-files">PROJECT FILES</button>
+                <button class="hud-btn-mini danger" id="btn-remove-file">REMOVE</button>
+                <button class="hud-btn-mini danger" id="btn-clear-all-files">CLEAR ALL</button>
+              </div>
+              <input type="file" id="context-file-input" multiple hidden accept=".txt,.md,.json,.py,.js,.css,.html,.csv,.log,text/*,application/json" />
+              <input type="file" id="context-folder-input" webkitdirectory directory multiple hidden />
+            </div>
+          </div>
+
+          <!-- Chat History Transcript Card -->
+          <div class="glass-panel transcript-card">
+            <div class="panel-header">
+              <span class="panel-title">CONVERSATION</span>
+              <span class="panel-subtitle">Type normally. Use /cmd to force commands or /ai to force multimodal chat.</span>
+            </div>
+            <div class="transcript-feed-area" id="chat-history">
+              <div class="chat-bubble jarvis-bubble">
+                <span class="sender">J.A.R.V.I.S.</span>
+                <p class="txt">Welcome, sir. Advanced 3D organic wave core active. Live diagnostics uplink completed. How may I assist you today?</p>
+              </div>
+            </div>
+            <!-- Composer Area Placeholder -->
+            <div class="composer-meta">
+              <div class="composer-title">COMPOSER</div>
+              <div class="composer-desc">Active references are reused until you clear them or switch KEEP REFERENCES off</div>
+              <div class="composer-controls">
+                <button class="hud-btn-mini" id="btn-attach-files">ATTACH FILES</button>
+                <button class="hud-btn-mini" id="btn-attach-image">ATTACH IMAGE</button>
+                <button class="hud-btn-mini primary" id="btn-composer-send">SEND</button>
+                <button class="hud-btn-mini danger" id="btn-clear-chat">CLEAR CHAT</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: ANALYTICS Right -->
+        <div class="tab-pane" id="pane-right-analytics">
+          <!-- Session Statistics -->
+          <div class="glass-panel session-stats-card">
+            <div class="panel-header">
+              <span class="panel-title">SESSION STATS</span>
+              <span class="panel-subtitle">Live counters for today/session</span>
+            </div>
+            <div class="stats-content">
+              <div class="stat-info-box">
+                <div class="info-row">
+                  <span class="lbl">Session start:</span>
+                  <span class="val" id="stat-session-start">18:59:02</span>
+                </div>
+                <div class="info-row">
+                  <span class="lbl">Uptime:</span>
+                  <span class="val" id="stat-uptime">00:02:46</span>
+                </div>
+                <div class="info-row">
+                  <span class="lbl">Commands today:</span>
+                  <span class="val" id="stat-commands-count">0</span>
+                </div>
+                <div class="info-row">
+                  <span class="lbl">AI queries:</span>
+                  <span class="val" id="stat-queries-count">0</span>
+                </div>
+                <div class="info-row">
+                  <span class="lbl">Photos taken:</span>
+                  <span class="val" id="stat-photos-taken">0</span>
+                </div>
+                <div class="info-row">
+                  <span class="lbl">Voice activations:</span>
+                  <span class="val" id="stat-voice-activations">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Processes list -->
+          <div class="glass-panel processes-card">
+            <div class="panel-header">
+              <span class="panel-title">TOP PROCESSES</span>
+              <span class="panel-subtitle">Top 10 by CPU - refresh 5 seconds</span>
+            </div>
+            <div class="processes-content">
+              <div class="table-container procs">
+                <table class="hud-table" id="process-table">
+                  <thead>
+                    <tr>
+                      <th>PID</th>
+                      <th>CPU %</th>
+                      <th>NAME</th>
+                    </tr>
+                  </thead>
+                  <tbody id="process-list-body">
+                    <tr>
+                      <td colspan="3" class="table-empty">Loading processes...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="processes-controls">
+                <button class="hud-btn danger" id="btn-kill-process">KILL SELECTED</button>
+                <button class="hud-btn" id="btn-refresh-processes">REFRESH</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: COMMAND CENTER Right -->
+        <div class="tab-pane" id="pane-right-command">
+          <!-- Notes Scratchpad Widget -->
+          <div class="glass-panel notes-card">
+            <div class="panel-header">
+              <span class="panel-title">NOTES</span>
+              <span class="panel-subtitle">Add, search, and delete notes</span>
+            </div>
+            <div class="notes-content">
+              <div class="notes-search-row">
+                <input type="text" id="notes-search" placeholder="Search notes..." class="hud-input" />
+                <button class="hud-btn-mini" id="notes-search-btn">SEARCH</button>
+              </div>
+              <div class="notes-list-box" id="notes-scroll-box">
+                <!-- Javascript populated -->
+              </div>
+              <div class="notes-input-area">
+                <textarea id="notes-input" placeholder="Type note content..." class="hud-textarea"></textarea>
+                <div class="notes-controls">
+                  <button class="hud-btn" id="notes-save-btn">SAVE</button>
+                  <button class="hud-btn danger" id="notes-delete-btn">DELETE</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Countdown Reminders Widget -->
+          <div class="glass-panel reminders-card">
+            <div class="panel-header">
+              <span class="panel-title">REMINDERS</span>
+              <span class="panel-subtitle">Active reminders with countdown</span>
+            </div>
+            <div class="reminders-content">
+              <div class="reminders-active-list" id="reminders-scroll-box">
+                <!-- Javascript populated -->
+              </div>
+              <div class="reminders-input-area">
+                <div class="reminders-timer-row">
+                  <input type="number" id="reminder-mins" value="5" min="1" max="1440" class="hud-input num" />
+                  <div class="timer-btn-row">
+                    <button class="hud-btn" id="reminder-set-btn">SET</button>
+                    <button class="hud-btn danger" id="reminder-cancel-btn">CANCEL</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: SECURITY Right -->
+        <div class="tab-pane" id="pane-right-security">
+          <!-- Antivirus Status Widget -->
+          <div class="glass-panel defender-card">
+            <div class="panel-header">
+              <span class="panel-title">SYSTEM SECURITY</span>
+              <span class="panel-subtitle">Processes, flags, and basic signals</span>
+            </div>
+            <div class="defender-content">
+              <div class="defender-status-box" id="sec-defender-status">
+                Defender status: (not wired)
+              </div>
+            </div>
+          </div>
+
+          <!-- File System explorer with desktop shortcuts -->
+          <div class="glass-panel filesystem-card">
+            <div class="panel-header">
+              <span class="panel-title">FILE SYSTEM</span>
+              <span class="panel-subtitle">Quick folders + recently modified files</span>
+            </div>
+            <div class="filesystem-content">
+              <div class="quick-links">
+                <button class="hud-btn-mini" data-folder="desktop">DESKTOP</button>
+                <button class="hud-btn-mini" data-folder="downloads">DOWNLOADS</button>
+                <button class="hud-btn-mini" data-folder="documents">DOCUMENTS</button>
+                <button class="hud-btn-mini" data-folder="photos">PHOTOS</button>
+              </div>
+              <div class="files-list-box" id="sec-recent-files-box">
+                <span class="empty-deck-msg">No files indexed yet.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: SETTINGS Right -->
+        <div class="tab-pane" id="pane-right-settings">
+          <!-- Voice Parameters Settings Widget -->
+          <div class="glass-panel voice-settings-card">
+            <div class="panel-header">
+              <span class="panel-title">VOICE SETTINGS</span>
+              <span class="panel-subtitle">TTS controls + wake words</span>
+            </div>
+            <div class="voice-settings-content form-layout">
+              <div class="form-group row">
+                <label for="cfg-tts-rate">TTS rate</label>
+                <div class="slider-row">
+                  <input type="range" id="cfg-tts-rate" min="80" max="300" step="1" class="hud-slider" />
+                  <span class="range-val" id="tts-rate-val">172</span>
+                </div>
+              </div>
+              <div class="form-group row">
+                <label for="cfg-tts-volume">TTS volume</label>
+                <div class="slider-row">
+                  <input type="range" id="cfg-tts-volume" min="0" max="1" step="0.05" class="hud-slider" />
+                  <span class="range-val" id="tts-vol-val">0.95</span>
+                </div>
+              </div>
+              <div class="form-group row">
+                <label for="cfg-wake-words">Wake words</label>
+                <input type="text" id="cfg-wake-words" class="hud-input" placeholder="jarvis, hey jarvis, ok jarvis, j.a.r.v.i.s" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-tts-backend">TTS backend</label>
+                <select id="cfg-tts-backend" class="hud-select">
+                  <option value="edge_tts">Edge TTS</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                  <option value="browser">Browser fallback</option>
+                </select>
+              </div>
+              <div class="form-group row">
+                <label for="cfg-edge-tts-voice">Edge voice</label>
+                <input type="text" id="cfg-edge-tts-voice" class="hud-input" placeholder="hi-IN-MadhurNeural" />
+              </div>
+              <div class="form-group row">
+                <label for="cfg-elevenlabs-voice">ElevenLabs voice</label>
+                <input type="text" id="cfg-elevenlabs-voice" class="hud-input" placeholder="HH8sIQq8WOcER3Nu118i" />
+              </div>
+              <button class="hud-btn primary voice-test-btn" id="btn-test-voice">TEST VOICE</button>
+            </div>
+          </div>
+
+          <!-- Appearance Configurations Widget -->
+          <div class="glass-panel appearance-settings-card">
+            <div class="panel-header">
+              <span class="panel-title">APPEARANCE</span>
+              <span class="panel-subtitle">Theme placeholders (wired later)</span>
+            </div>
+            <div class="appearance-content">
+              <div class="theme-info-box">
+                Theme selector, font size, orb size, opacity are placeholders here.
+              </div>
+              <div class="appearance-buttons">
+                <button class="hud-btn" id="btn-export-config">EXPORT CONFIG</button>
+                <button class="hud-btn" id="btn-import-config">IMPORT CONFIG</button>
+                <button class="hud-btn primary" id="btn-save-settings">SAVE</button>
+                <button class="hud-btn danger" id="btn-reset-settings">RESET</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+      
+    </main>
+
+    <!-- Bottom Audio Equalizer HUD Overlay Bar -->
+    <footer class="hud-footer glass-panel">
+      <div class="footer-left">
+        <span class="sec-lbl" id="footer-left-status">STANDBY | SPECTRUM</span>
+      </div>
+      <div class="footer-center">
+        <!-- Equalizer elements placeholder -->
+        <div class="hud-equalizer" id="hud-equalizer-bars">
+          <div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div><div class="eq-bar"></div>
+        </div>
+      </div>
+      <div class="footer-right">
+        <span class="sec-lbl" id="footer-right-version">V5.0 // MULTIMODAL CORE</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js?v=glass-lock-20260523"></script>
+</body>
+</html>

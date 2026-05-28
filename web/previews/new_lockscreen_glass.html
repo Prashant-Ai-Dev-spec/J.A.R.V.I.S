@@ -1,0 +1,106 @@
+<!-- 
+  GLASSMORPHIC LOCKSCREEN — REPLACEMENT BLOCK
+  Replace your existing lockscreen div in index.html with this.
+  Keep same IDs: pass-display, key-del, key-enter, bio-scan-trigger
+-->
+  <div id="lockscreen" class="lockscreen-overlay neo-lockscreen">
+
+    <!-- Corner marks -->
+    <div class="nlk-corner nlk-tl"></div>
+    <div class="nlk-corner nlk-tr"></div>
+    <div class="nlk-corner nlk-bl"></div>
+    <div class="nlk-corner nlk-br"></div>
+
+    <!-- Scan line -->
+    <div class="nlk-scanline"></div>
+
+    <!-- Side telemetry -->
+    <div class="nlk-side nlk-side-left">
+      <span>SYS::LOCK</span>
+      <span>AUTH::PEND</span>
+      <span>TIER::3</span>
+      <span>ENC::256</span>
+    </div>
+    <div class="nlk-side nlk-side-right">
+      <span>NODE::01</span>
+      <span>VER::5.0</span>
+      <span>CORE::OK</span>
+      <span>NET::UP</span>
+    </div>
+
+    <!-- CENTER -->
+    <div class="nlk-center">
+
+      <!-- Glass card -->
+      <div class="nlk-glass-card">
+
+        <!-- Bio orb -->
+        <button class="nlk-rings" id="bio-scan-trigger" type="button" aria-label="Biometric scan">
+          <div class="nlk-ring nlk-r1"></div>
+          <div class="nlk-ring nlk-r2"></div>
+          <div class="nlk-ring nlk-r3"></div>
+          <div class="nlk-ring-core">
+            <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="20" cy="20" r="18" stroke="#0ef" stroke-width="0.8" opacity="0.5"/>
+              <circle cx="20" cy="20" r="10" stroke="#4f8fff" stroke-width="0.8" opacity="0.6"/>
+              <circle cx="20" cy="20" r="4" fill="#0ef" opacity="0.9"/>
+              <circle cx="20" cy="20" r="2" fill="#fff"/>
+            </svg>
+          </div>
+          <span class="nlk-bio-hint">BIOMETRIC SCAN</span>
+        </button>
+
+        <!-- Brand -->
+        <div class="nlk-header">
+          <div class="nlk-brand-title">J.A.R.V.I.S.</div>
+          <div class="nlk-brand-sub">Stark Industries · Secure Access Portal</div>
+        </div>
+
+        <!-- Divider -->
+        <div class="nlk-divider">
+          <span class="nlk-div-line"></span>
+          <span class="nlk-div-label">NEURAL AUTH REQUIRED</span>
+          <span class="nlk-div-line"></span>
+        </div>
+
+        <!-- Input -->
+        <div class="nlk-input-wrap">
+          <span class="nlk-input-label">OVERRIDE CODE</span>
+          <div class="nlk-input-row">
+            <div class="nlk-pass-dots" id="pass-display">••••••••</div>
+            <div class="nlk-input-sep"></div>
+            <button class="nlk-enter-icon" id="key-enter" type="button" aria-label="Enter">↵</button>
+          </div>
+          <div class="nlk-type-hint" style="margin-top:10px">
+            Type your code &nbsp;<kbd>↵ ENTER</kbd>&nbsp; to authenticate
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="nlk-actions">
+          <button id="key-del" class="nlk-act-btn nlk-del-btn" type="button">⌫ &nbsp;Clear</button>
+          <button class="nlk-act-btn nlk-submit-btn" type="button"
+                  onclick="document.getElementById('key-enter').click()">
+            Access &nbsp;→
+          </button>
+        </div>
+
+        <!-- Status -->
+        <div class="nlk-status-bar">
+          <span class="nlk-status-dot"></span>
+          <span id="nlk-status-text">AWAITING AUTHORIZATION</span>
+        </div>
+
+      </div><!-- /glass-card -->
+
+      <!-- Bottom meta line -->
+      <div class="nlk-meta">
+        <span>STARK INDUSTRIES</span>
+        <span class="nlk-meta-sep">·</span>
+        <span>PERSONAL OS v5.0</span>
+        <span class="nlk-meta-sep">·</span>
+        <span>CLASSIFIED</span>
+      </div>
+
+    </div><!-- /center -->
+  </div><!-- /lockscreen -->
