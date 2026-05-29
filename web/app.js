@@ -189,15 +189,17 @@ function initPasscode() {
   const keys = document.querySelectorAll(".key-btn[data-val]");
   const deleteBtn = document.getElementById("key-del");
   const enterBtn = document.getElementById("key-enter");
+  const pasteBtn = document.getElementById("key-paste");
   const bioTrigger = document.getElementById("bio-scan-trigger");
   const lockscreenRoot = document.getElementById("lockscreen");
   const statusText = document.getElementById("nlk-status-text");
+  const MAX_TOKEN_LENGTH = 256;
 
   keys.forEach(btn => {
     btn.addEventListener("click", () => {
       playSynthSound("click");
       clearAuthError();
-      if (currentPasscode.length < 18) {
+      if (currentPasscode.length < MAX_TOKEN_LENGTH) {
         currentPasscode += btn.getAttribute("data-val");
         pulseVirtualKey(btn.getAttribute("data-key") || btn.getAttribute("data-val"));
         updatePasscodeDisplay();
@@ -221,6 +223,41 @@ function initPasscode() {
       verifyAccess();
     });
   }
+
+  function setPasscodeFromText(text) {
+    const clean = String(text || "").trim().slice(0, MAX_TOKEN_LENGTH);
+    if (!clean) return;
+    currentPasscode = clean;
+    updatePasscodeDisplay();
+  }
+
+  async function pasteTokenFromClipboard() {
+    clearAuthError();
+    try {
+      const text = await navigator.clipboard.readText();
+      setPasscodeFromText(text);
+      if (statusText) statusText.textContent = "TOKEN PASTED";
+      playSynthSound("success");
+    } catch (_err) {
+      if (statusText) statusText.textContent = "PRESS CTRL+V TO PASTE TOKEN";
+      playSynthSound("error");
+    }
+  }
+
+  if (pasteBtn) {
+    pasteBtn.addEventListener("click", pasteTokenFromClipboard);
+  }
+
+  document.addEventListener("paste", (e) => {
+    const lockscreen = document.getElementById("lockscreen");
+    if (!lockscreen || lockscreen.style.opacity === "0") return;
+    const text = e.clipboardData?.getData("text") || "";
+    if (!text.trim()) return;
+    e.preventDefault();
+    clearAuthError();
+    setPasscodeFromText(text);
+    if (statusText) statusText.textContent = "TOKEN PASTED";
+  });
 
   // Keyboard support for passcode (so you can type "jarvis" or anything else)
   document.addEventListener("keydown", (e) => {
@@ -247,7 +284,7 @@ function initPasscode() {
       playSynthSound("click");
       clearAuthError();
       pulseVirtualKey(e.key);
-      if (currentPasscode.length < 18) {
+      if (currentPasscode.length < MAX_TOKEN_LENGTH) {
         currentPasscode += e.key;
         updatePasscodeDisplay();
       }
@@ -290,7 +327,7 @@ function initPasscode() {
       display.removeAttribute("data-filled");
       if (statusText) statusText.textContent = "AWAITING AUTHORIZATION";
     } else {
-      display.textContent = "•".repeat(currentPasscode.length);
+      display.textContent = "•".repeat(Math.min(currentPasscode.length, 24));
       display.setAttribute("data-filled", String(currentPasscode.length));
       if (statusText) statusText.textContent = `${currentPasscode.length} GLYPHS CAPTURED`;
     }

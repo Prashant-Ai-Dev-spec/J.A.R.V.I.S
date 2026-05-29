@@ -44,6 +44,11 @@
   --glass-shadow: 0 8px 36px 0 rgba(0, 0, 0, 0.85);
 }
 
+.nlk-paste-btn {
+  border-color: rgba(0, 216, 255, 0.42) !important;
+  color: #d8fbff !important;
+}
+
 /* Scrollbars */
 ::-webkit-scrollbar {
   width: 4px;
