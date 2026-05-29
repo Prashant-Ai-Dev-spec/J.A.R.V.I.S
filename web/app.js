@@ -106,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Validate with server and unlock
       fetch("/api/auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: publicHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ token: urlToken })
       })
       .then(res => res.json())
@@ -184,6 +184,12 @@ function playSynthSound(type) {
 }
 
 // --- Passcode / Security Screen ---
+function publicHeaders(extra = {}) {
+  return Object.assign({
+    "ngrok-skip-browser-warning": "1"
+  }, extra);
+}
+
 function initPasscode() {
   const display = document.getElementById("pass-display");
   const keys = document.querySelectorAll(".key-btn[data-val]");
@@ -360,7 +366,7 @@ function initPasscode() {
     // Call server-side authentication endpoint
     fetch("/api/auth", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: publicHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ token: providedToken })
     })
     .then(res => {
@@ -2319,7 +2325,8 @@ function setMode(mode) {
 function authedHeaders(extra = {}) {
   return Object.assign({
     "Content-Type": "application/json",
-    "X-Jarvis-Token": apiToken || "jarvis"
+    "X-Jarvis-Token": apiToken || "jarvis",
+    "ngrok-skip-browser-warning": "1"
   }, extra);
 }
 
@@ -3123,10 +3130,7 @@ function initCameraHUD() {
       appendLog("CAMERA", "Saving face template reference to backend...", "sys");
       fetch("/api/auth", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Jarvis-Token": apiToken
-        },
+        headers: authedHeaders(),
         body: JSON.stringify({ image: dataUrl, save_template: true })
       })
       .then(res => res.json())

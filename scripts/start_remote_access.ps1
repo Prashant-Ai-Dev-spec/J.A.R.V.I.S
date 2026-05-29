@@ -79,10 +79,22 @@ if ($NgrokAuthtoken.Trim()) {
 
 $healthUrl = "http://${HostName}:${Port}/api/health"
 $webRunning = $false
+$webNeedsRestart = $false
 try {
-  Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2 | Out-Null
+  $health = Invoke-RestMethod -Uri $healthUrl -TimeoutSec 2
   $webRunning = $true
+  if (-not [bool]$health.token_required) {
+    $webNeedsRestart = $true
+  }
 } catch {
+  $webRunning = $false
+}
+
+if ($webNeedsRestart) {
+  Get-CimInstance Win32_Process -Filter "name = 'python.exe'" |
+    Where-Object { $_.CommandLine -match "jarvis_web\.py" -and $_.CommandLine -match "--port\s+$Port" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  Start-Sleep -Seconds 1
   $webRunning = $false
 }
 
