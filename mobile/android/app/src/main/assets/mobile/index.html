@@ -66,6 +66,33 @@
         <button id="sendCommand" class="primary wide">Send to JARVIS</button>
       </div>
 
+      <div class="glass companion-card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Live companion link</p>
+            <h3>Phone sensors to JARVIS</h3>
+            <p class="muted small">Camera, microphone, and location share only while this card says connected.</p>
+          </div>
+          <span id="companionStatus" class="call-chip">Disconnected</span>
+        </div>
+        <video id="companionPreview" class="companion-preview hidden" autoplay muted playsinline></video>
+        <div class="permission-grid">
+          <span id="permCamera">Camera: --</span>
+          <span id="permMic">Mic: --</span>
+          <span id="permLocation">Location: --</span>
+          <span id="permStorage">Storage: --</span>
+        </div>
+        <div class="row">
+          <button id="grantCompanionPermissions" class="secondary">Grant permissions</button>
+          <button id="testCompanionLink" class="secondary">Test HTTPS</button>
+        </div>
+        <div class="row">
+          <button id="connectCompanion" class="primary">Connect live</button>
+          <button id="disconnectCompanion" class="danger">Disconnect</button>
+        </div>
+        <p id="companionMessage" class="hint">Enter your HTTPS Ngrok URL and token in Settings first.</p>
+      </div>
+
       <div id="callCard" class="glass call-card hidden">
         <div class="section-head">
           <div>
@@ -168,7 +195,7 @@
         <p class="eyebrow">Connection</p>
         <h3>Mobile settings</h3>
         <label>Server URL</label>
-        <input id="settingsServerUrl" type="url" placeholder="http://PC-LAN-IP:8765" />
+        <input id="settingsServerUrl" type="url" placeholder="https://your-ngrok-url.ngrok-free.app" />
         <label>API token</label>
         <input id="settingsApiToken" type="password" placeholder="token" />
         <button id="saveSettings2" class="primary wide">Save settings</button>

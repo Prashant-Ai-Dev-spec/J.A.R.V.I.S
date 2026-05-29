@@ -133,12 +133,12 @@ button {
   backdrop-filter: blur(18px);
 }
 
-.setup-card, .hero-card, .chat-card, .camera-card, .screen > .glass {
+.setup-card, .hero-card, .chat-card, .camera-card, .companion-card, .screen > .glass {
   padding: 18px;
   margin: 10px 0 16px;
 }
 
-.setup-card h3, .hero-card h3, .chat-card h3, .camera-card h3, .screen h3 {
+.setup-card h3, .hero-card h3, .chat-card h3, .camera-card h3, .companion-card h3, .screen h3 {
   margin: 5px 0 8px;
   font-size: 20px;
 }
@@ -217,6 +217,39 @@ input:focus, textarea:focus {
   color: var(--muted);
   margin-top: 12px;
   font-size: 13px;
+}
+
+.companion-preview {
+  width: 100%;
+  margin: 12px 0;
+  border: 1px solid rgba(33, 213, 255, 0.28);
+  border-radius: 18px;
+  background: #000;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.permission-grid span {
+  min-height: 34px;
+  padding: 9px 10px;
+  border: 1px solid rgba(160, 177, 255, 0.16);
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(7, 8, 18, 0.38);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.call-chip.ok {
+  color: #06130e;
+  background: linear-gradient(135deg, var(--green), rgba(255,255,255,0.7));
 }
 
 .status-pill {

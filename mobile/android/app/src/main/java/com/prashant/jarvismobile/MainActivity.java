@@ -16,6 +16,7 @@ import android.provider.Settings;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.webkit.JavascriptInterface;
+import android.webkit.GeolocationPermissions;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -31,12 +32,19 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.json.JSONObject;
+
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Response;
+import retrofit2.Retrofit;
 
 public class MainActivity extends Activity {
     private static final int REQUEST_SPEECH = 701;
@@ -44,6 +52,7 @@ public class MainActivity extends Activity {
     private static final int REQUEST_AUDIO_PERMISSION = 703;
     private static final int REQUEST_CALL_SECRETARY_PERMISSIONS = 704;
     private static final int REQUEST_CALL_SCREENING_ROLE = 705;
+    private static final int REQUEST_COMPANION_PERMISSIONS = 706;
 
     private WebView webView;
     private SharedPreferences prefs;
@@ -87,6 +96,13 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 runOnUiThread(() -> request.grant(request.getResources()));
+            }
+
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                boolean allowed = ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        || ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+                callback.invoke(origin, allowed, false);
             }
 
             @Override
@@ -176,6 +192,114 @@ public class MainActivity extends Activity {
         if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
             permissions.add(permission);
         }
+    }
+
+    private ArrayList<String> missingCompanionPermissions() {
+        ArrayList<String> permissions = new ArrayList<>();
+        addPermissionIfMissing(permissions, Manifest.permission.CAMERA);
+        addPermissionIfMissing(permissions, Manifest.permission.RECORD_AUDIO);
+        addPermissionIfMissing(permissions, Manifest.permission.ACCESS_FINE_LOCATION);
+        addPermissionIfMissing(permissions, Manifest.permission.ACCESS_COARSE_LOCATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            addPermissionIfMissing(permissions, Manifest.permission.READ_MEDIA_IMAGES);
+            addPermissionIfMissing(permissions, Manifest.permission.READ_MEDIA_VIDEO);
+            addPermissionIfMissing(permissions, Manifest.permission.READ_MEDIA_AUDIO);
+        } else {
+            addPermissionIfMissing(permissions, Manifest.permission.READ_EXTERNAL_STORAGE);
+        }
+        return permissions;
+    }
+
+    private void requestCompanionPermissions() {
+        ArrayList<String> permissions = missingCompanionPermissions();
+        if (permissions.isEmpty()) {
+            postToJs("window.onCompanionPermissionsUpdated && window.onCompanionPermissionsUpdated(" + jsString(companionPermissionStatus()) + ")");
+            return;
+        }
+        ActivityCompat.requestPermissions(
+                this,
+                permissions.toArray(new String[0]),
+                REQUEST_COMPANION_PERMISSIONS
+        );
+    }
+
+    private String companionPermissionStatus() {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("camera", ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED);
+            json.put("microphone", ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
+            json.put("fine_location", ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED);
+            json.put("coarse_location", ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED);
+            boolean storage;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                storage = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                        || ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+                        || ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
+            } else {
+                storage = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+            }
+            json.put("storage", storage);
+            json.put("all_granted", missingCompanionPermissions().isEmpty());
+            return json.toString();
+        } catch (Exception exc) {
+            return "{\"error\":\"" + exc.getMessage() + "\"}";
+        }
+    }
+
+    private boolean isSafeCompanionUrl(String rawUrl) {
+        String value = rawUrl == null ? "" : rawUrl.trim().toLowerCase(Locale.ROOT);
+        return value.startsWith("https://")
+                || value.startsWith("http://127.0.0.1")
+                || value.startsWith("http://localhost")
+                || value.startsWith("http://10.")
+                || value.startsWith("http://172.16.")
+                || value.startsWith("http://172.17.")
+                || value.startsWith("http://172.18.")
+                || value.startsWith("http://172.19.")
+                || value.startsWith("http://172.20.")
+                || value.startsWith("http://172.21.")
+                || value.startsWith("http://172.22.")
+                || value.startsWith("http://172.23.")
+                || value.startsWith("http://172.24.")
+                || value.startsWith("http://172.25.")
+                || value.startsWith("http://172.26.")
+                || value.startsWith("http://172.27.")
+                || value.startsWith("http://172.28.")
+                || value.startsWith("http://172.29.")
+                || value.startsWith("http://172.30.")
+                || value.startsWith("http://172.31.")
+                || value.startsWith("http://192.168.");
+    }
+
+    private String normalizeRetrofitBaseUrl(String rawUrl) {
+        String value = rawUrl == null ? "" : rawUrl.trim();
+        if (value.isEmpty()) return "";
+        if (!value.endsWith("/")) value += "/";
+        return value;
+    }
+
+    private void testCompanionConnection(String serverUrl, String token) {
+        String baseUrl = normalizeRetrofitBaseUrl(serverUrl);
+        if (baseUrl.isEmpty() || !isSafeCompanionUrl(baseUrl)) {
+            postToJs("window.onNativeCompanionTest && window.onNativeCompanionTest(false, 'Use HTTPS Ngrok URL or a local Wi-Fi URL.')");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Retrofit retrofit = new Retrofit.Builder()
+                        .baseUrl(baseUrl)
+                        .build();
+                CompanionApi api = retrofit.create(CompanionApi.class);
+                Call<ResponseBody> call = api.health(token == null ? "" : token);
+                Response<ResponseBody> response = call.execute();
+                String message = response.isSuccessful()
+                        ? "Connected by Retrofit over " + (baseUrl.startsWith("https://") ? "HTTPS." : "local HTTP.")
+                        : "Server replied HTTP " + response.code();
+                postToJs("window.onNativeCompanionTest && window.onNativeCompanionTest(" + response.isSuccessful() + ", " + jsString(message) + ")");
+            } catch (Exception exc) {
+                postToJs("window.onNativeCompanionTest && window.onNativeCompanionTest(false, " + jsString(exc.getMessage()) + ")");
+            }
+        }).start();
     }
 
     private void requestCallScreeningRole() {
@@ -458,6 +582,16 @@ public class MainActivity extends Activity {
         } else if (requestCode == REQUEST_CALL_SECRETARY_PERMISSIONS) {
             requestCallScreeningRole();
             postToJs("window.onNormalCallSecretaryUpdated && window.onNormalCallSecretaryUpdated('Permissions updated')");
+        } else if (requestCode == REQUEST_COMPANION_PERMISSIONS) {
+            Set<String> denied = new HashSet<>();
+            for (int i = 0; i < permissions.length; i++) {
+                if (grantResults.length <= i || grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                    denied.add(permissions[i]);
+                }
+            }
+            String message = denied.isEmpty() ? "Companion permissions granted." : "Some companion permissions were denied.";
+            postToJs("window.onCompanionPermissionsUpdated && window.onCompanionPermissionsUpdated(" + jsString(companionPermissionStatus()) + ")");
+            postToJs("window.onNativeSpeechError && window.onNativeSpeechError(" + jsString(message) + ")");
         }
     }
 
@@ -520,6 +654,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public String mobileControlStatus() {
             return MainActivity.this.mobileControlStatus();
+        }
+
+        @JavascriptInterface
+        public void requestCompanionPermissions() {
+            runOnUiThread(MainActivity.this::requestCompanionPermissions);
+        }
+
+        @JavascriptInterface
+        public String companionPermissionStatus() {
+            return MainActivity.this.companionPermissionStatus();
+        }
+
+        @JavascriptInterface
+        public void testCompanionConnection(String serverUrl, String token) {
+            MainActivity.this.testCompanionConnection(serverUrl, token);
         }
 
         @JavascriptInterface

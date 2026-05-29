@@ -8,6 +8,7 @@ This folder now contains a clean Android WebView companion app for JARVIS.
 - Stores the PC server URL and API token locally on the phone.
 - Sends commands to the laptop JARVIS brain through `jarvis_web.py`.
 - Supports Android speech input, Android TTS, dashboard stats, quick actions, and image upload.
+- Supports an explicit live companion mode for camera frames, microphone audio chunks, and location updates.
 - Keeps existing APKs under `bin/` untouched.
 
 ## PC Setup
@@ -25,6 +26,31 @@ Then open the APK and set:
 Server URL: http://YOUR-PC-LAN-IP:8765
 API token:  the same JARVIS_WEB_TOKEN
 ```
+
+## Ngrok / HTTPS Companion Mode
+
+For remote access, expose the laptop server through an HTTPS Ngrok URL and enter that URL in the app settings:
+
+```text
+Server URL: https://your-ngrok-url.ngrok-free.app
+API token:  the same JARVIS_WEB_TOKEN
+```
+
+Live companion mode is transparent:
+
+- The user taps **Grant permissions** and Android shows normal permission dialogs.
+- The user taps **Connect live** before camera, microphone, or location sharing starts.
+- The app shows a visible **Connected/Disconnected** status.
+- The user can tap **Disconnect** anytime to stop camera tracks, microphone recording, frame sending, and location watching.
+- No hidden background service is started for this live companion mode.
+
+The laptop receives latest snapshots under:
+
+```text
+.jarvis_runtime/mobile_companion/
+```
+
+That folder is local runtime data and is ignored by Git.
 
 ## Custom Opening Video
 

@@ -7,6 +7,13 @@ const state = {
   callsTimer: null,
   activeCall: null,
   selectedImage: "",
+  companion: {
+    connected: false,
+    stream: null,
+    frameTimer: null,
+    locationWatch: null,
+    audioRecorder: null,
+  },
 };
 
 function nativeAvailable() {
@@ -81,7 +88,18 @@ function setConnection(ok, label) {
 
 function requireServer() {
   if (!state.serverUrl) {
-    throw new Error("Server URL missing. Add your PC LAN URL in settings.");
+    throw new Error("Server URL missing. Add your HTTPS Ngrok URL or PC LAN URL in settings.");
+  }
+}
+
+function isLocalUrl(url) {
+  return /^http:\/\/(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(url || "");
+}
+
+function requireCompanionUrl() {
+  requireServer();
+  if (!/^https:\/\//i.test(state.serverUrl) && !isLocalUrl(state.serverUrl)) {
+    throw new Error("Use HTTPS Ngrok URL for remote access. Local Wi-Fi HTTP is allowed only on private LAN.");
   }
 }
 
@@ -104,6 +122,216 @@ async function api(path, options = {}) {
     throw new Error(data.error || `HTTP ${res.status}`);
   }
   return data;
+}
+
+async function companionApi(path, body) {
+  requireCompanionUrl();
+  return api(path, {
+    method: "POST",
+    body: JSON.stringify(body || {}),
+  });
+}
+
+function setCompanionMessage(text, isError = false) {
+  $("companionMessage").textContent = text || "";
+  $("companionMessage").style.color = isError ? "var(--red)" : "var(--muted)";
+}
+
+function setCompanionStatus(connected, label) {
+  state.companion.connected = !!connected;
+  const status = $("companionStatus");
+  status.textContent = label || (connected ? "Connected" : "Disconnected");
+  status.classList.toggle("ok", !!connected);
+}
+
+function renderPermissionStatus(status) {
+  const data = status || {};
+  $("permCamera").textContent = `Camera: ${data.camera ? "granted" : "needed"}`;
+  $("permMic").textContent = `Mic: ${data.microphone ? "granted" : "needed"}`;
+  $("permLocation").textContent = `Location: ${(data.fine_location || data.coarse_location) ? "granted" : "needed"}`;
+  $("permStorage").textContent = `Storage: ${data.storage ? "granted" : "needed"}`;
+}
+
+function refreshCompanionPermissions() {
+  const status = nativeJson("companionPermissionStatus");
+  if (status) renderPermissionStatus(status);
+}
+
+function requestCompanionPermissions() {
+  if (nativeAvailable() && window.JarvisAndroid.requestCompanionPermissions) {
+    window.JarvisAndroid.requestCompanionPermissions();
+    setCompanionMessage("Android permission dialogs opening. Grant only what you want to share.");
+    return;
+  }
+  setCompanionMessage("Use the browser permission dialogs when Connect live is tapped.");
+}
+
+window.onCompanionPermissionsUpdated = (rawStatus) => {
+  try {
+    renderPermissionStatus(JSON.parse(rawStatus || "{}"));
+  } catch {
+    refreshCompanionPermissions();
+  }
+};
+
+window.onNativeCompanionTest = (ok, message) => {
+  setCompanionStatus(false, ok ? "Server reachable" : "Disconnected");
+  setCompanionMessage(message || (ok ? "Server reachable." : "Server test failed."), !ok);
+};
+
+function testCompanionLink() {
+  saveSettings();
+  try {
+    requireCompanionUrl();
+  } catch (err) {
+    setCompanionMessage(err.message, true);
+    return;
+  }
+  if (nativeAvailable() && window.JarvisAndroid.testCompanionConnection) {
+    window.JarvisAndroid.testCompanionConnection(state.serverUrl, state.apiToken || "");
+    setCompanionMessage("Testing connection with native Retrofit...");
+    return;
+  }
+  testConnection();
+}
+
+function dataUrlFromBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function startFrameLoop(video) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  state.companion.frameTimer = setInterval(async () => {
+    if (!state.companion.connected || !ctx || video.readyState < 2) return;
+    const w = Math.min(640, video.videoWidth || 640);
+    const h = Math.max(1, Math.round(w * ((video.videoHeight || 480) / (video.videoWidth || 640))));
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(video, 0, 0, w, h);
+    try {
+      await companionApi("/api/mobile/frame", {
+        image: canvas.toDataURL("image/jpeg", 0.58),
+        width: w,
+        height: h,
+        captured_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      setCompanionMessage(`Frame send failed: ${err.message}`, true);
+    }
+  }, 1500);
+}
+
+function startAudioLoop(stream) {
+  if (!("MediaRecorder" in window)) {
+    setCompanionMessage("Camera/location active. Audio recorder is unavailable on this WebView.", true);
+    return;
+  }
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) return;
+  const audioStream = new MediaStream(audioTracks);
+  const recorder = new MediaRecorder(audioStream);
+  state.companion.audioRecorder = recorder;
+  recorder.ondataavailable = async (event) => {
+    if (!state.companion.connected || !event.data || !event.data.size) return;
+    try {
+      await companionApi("/api/mobile/audio", {
+        audio: await dataUrlFromBlob(event.data),
+        mime_type: event.data.type || "audio/webm",
+        captured_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      setCompanionMessage(`Audio send failed: ${err.message}`, true);
+    }
+  };
+  recorder.start(2500);
+}
+
+function startLocationLoop() {
+  if (!navigator.geolocation) {
+    setCompanionMessage("Camera/audio active. Location is unavailable on this device.", true);
+    return;
+  }
+  state.companion.locationWatch = navigator.geolocation.watchPosition(
+    async (pos) => {
+      if (!state.companion.connected) return;
+      try {
+        await companionApi("/api/mobile/location", {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy,
+          altitude_m: pos.coords.altitude,
+          speed_mps: pos.coords.speed,
+          heading_deg: pos.coords.heading,
+          captured_at: new Date(pos.timestamp).toISOString(),
+        });
+      } catch (err) {
+        setCompanionMessage(`Location send failed: ${err.message}`, true);
+      }
+    },
+    (err) => setCompanionMessage(`Location permission/error: ${err.message}`, true),
+    { enableHighAccuracy: true, maximumAge: 3000, timeout: 12000 }
+  );
+}
+
+async function connectCompanion() {
+  saveSettings();
+  try {
+    requireCompanionUrl();
+    await api("/api/health");
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: true,
+    });
+    state.companion.stream = stream;
+    const preview = $("companionPreview");
+    preview.srcObject = stream;
+    preview.classList.remove("hidden");
+    setCompanionStatus(true, "Connected");
+    setConnection(true, "Online");
+    setCompanionMessage("Live sharing is ON. Disconnect anytime to stop camera, mic, and location.");
+    await companionApi("/api/mobile/session", { status: "connected", connected_at: new Date().toISOString() });
+    startFrameLoop(preview);
+    startAudioLoop(stream);
+    startLocationLoop();
+  } catch (err) {
+    disconnectCompanion(false);
+    setCompanionMessage(err.message, true);
+  }
+}
+
+async function disconnectCompanion(notify = true) {
+  if (state.companion.frameTimer) clearInterval(state.companion.frameTimer);
+  state.companion.frameTimer = null;
+  if (state.companion.locationWatch !== null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(state.companion.locationWatch);
+  }
+  state.companion.locationWatch = null;
+  try {
+    if (state.companion.audioRecorder && state.companion.audioRecorder.state !== "inactive") {
+      state.companion.audioRecorder.stop();
+    }
+  } catch {}
+  state.companion.audioRecorder = null;
+  if (state.companion.stream) {
+    state.companion.stream.getTracks().forEach((track) => track.stop());
+  }
+  state.companion.stream = null;
+  const preview = $("companionPreview");
+  preview.srcObject = null;
+  preview.classList.add("hidden");
+  setCompanionStatus(false, "Disconnected");
+  if (notify && state.serverUrl) {
+    try {
+      await companionApi("/api/mobile/session", { status: "disconnected", disconnected_at: new Date().toISOString() });
+    } catch {}
+  }
+  setCompanionMessage("Live sharing is OFF.");
 }
 
 function addBubble(text, who = "jarvis") {
@@ -529,6 +757,10 @@ function bindEvents() {
   $("disableNormalCall").addEventListener("click", () => setNormalCallEnabled(false));
   $("setupPhoneControl").addEventListener("click", setupPhoneControl);
   $("refreshPhoneControl").addEventListener("click", refreshPhoneControl);
+  $("grantCompanionPermissions").addEventListener("click", requestCompanionPermissions);
+  $("testCompanionLink").addEventListener("click", testCompanionLink);
+  $("connectCompanion").addEventListener("click", connectCompanion);
+  $("disconnectCompanion").addEventListener("click", () => disconnectCompanion(true));
 
   document.querySelectorAll(".bottom-nav button").forEach((button) => {
     button.addEventListener("click", () => switchTab(button.dataset.tab));
@@ -625,4 +857,5 @@ document.addEventListener("DOMContentLoaded", () => {
   addBubble("Ready bhai. Connect your PC JARVIS and send a command.", "jarvis");
   setTimeout(refreshNormalCallSecretary, 800);
   setTimeout(refreshPhoneControl, 900);
+  setTimeout(refreshCompanionPermissions, 1000);
 });

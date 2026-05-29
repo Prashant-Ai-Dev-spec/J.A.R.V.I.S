@@ -73,6 +73,7 @@ except Exception:
 BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 TASKS_FILE = BASE_DIR / "jarvis_tasks.json"
+MOBILE_COMPANION_DIR = BASE_DIR / ".jarvis_runtime" / "mobile_companion"
 _system_stats_net_lock = threading.Lock()
 _system_stats_net_state = {
     "time": 0.0,
@@ -136,6 +137,26 @@ def _make_json_safe(obj):
 def _json_bytes(payload: dict, status: int = 200) -> tuple[int, bytes]:
     safe_payload = _make_json_safe(payload)
     return status, json.dumps(safe_payload, ensure_ascii=True).encode("utf-8")
+
+
+def _decode_data_url(value: str) -> tuple[bytes, str]:
+    raw = str(value or "")
+    if "," in raw and raw.startswith("data:"):
+        header, b64 = raw.split(",", 1)
+        mime = header[5:].split(";", 1)[0] or "application/octet-stream"
+    else:
+        b64 = raw
+        mime = "application/octet-stream"
+    import base64
+
+    return base64.b64decode(b64), mime
+
+
+def _write_mobile_companion_json(name: str, payload: dict) -> None:
+    MOBILE_COMPANION_DIR.mkdir(parents=True, exist_ok=True)
+    body = dict(payload)
+    body["server_received_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    (MOBILE_COMPANION_DIR / name).write_text(json.dumps(_make_json_safe(body), indent=2), encoding="utf-8")
 
 
 def _local_ips() -> list[str]:
@@ -1150,6 +1171,117 @@ class JarvisWebHandler(BaseHTTPRequestHandler):
                 source = str(payload.get("source") or self.client_address[0] or "esp8266").strip()
                 queued, message, status = _queue_esp_button_event(source)
                 self._send_json({"ok": True, "queued": queued, "message": message, "esp_button": status})
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if route == "/api/mobile/session":
+            if not self._authorized():
+                self._send_json({"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
+            try:
+                payload = self._read_json()
+                status = str(payload.get("status") or "unknown").strip().lower()
+                if status not in {"connected", "disconnected", "paused", "unknown"}:
+                    self._send_json({"ok": False, "error": "Invalid mobile session status"}, HTTPStatus.BAD_REQUEST)
+                    return
+                _write_mobile_companion_json("session.json", {
+                    "status": status,
+                    "client": self.client_address[0],
+                    "connected_at": payload.get("connected_at"),
+                    "disconnected_at": payload.get("disconnected_at"),
+                })
+                self._send_json({"ok": True, "status": status})
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if route == "/api/mobile/location":
+            if not self._authorized():
+                self._send_json({"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
+            try:
+                payload = self._read_json()
+                lat = float(payload.get("latitude"))
+                lon = float(payload.get("longitude"))
+                if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                    self._send_json({"ok": False, "error": "Invalid coordinates"}, HTTPStatus.BAD_REQUEST)
+                    return
+                _write_mobile_companion_json("latest_location.json", {
+                    "latitude": lat,
+                    "longitude": lon,
+                    "accuracy_m": payload.get("accuracy_m"),
+                    "altitude_m": payload.get("altitude_m"),
+                    "speed_mps": payload.get("speed_mps"),
+                    "heading_deg": payload.get("heading_deg"),
+                    "captured_at": payload.get("captured_at"),
+                    "client": self.client_address[0],
+                })
+                self._send_json({"ok": True})
+            except (TypeError, ValueError):
+                self._send_json({"ok": False, "error": "latitude and longitude are required"}, HTTPStatus.BAD_REQUEST)
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if route == "/api/mobile/frame":
+            if not self._authorized():
+                self._send_json({"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
+            try:
+                payload = self._read_json()
+                img_bytes, mime = _decode_data_url(str(payload.get("image") or ""))
+                if not img_bytes or len(img_bytes) > 2_500_000:
+                    self._send_json({"ok": False, "error": "Invalid or oversized frame"}, HTTPStatus.BAD_REQUEST)
+                    return
+                MOBILE_COMPANION_DIR.mkdir(parents=True, exist_ok=True)
+                suffix = ".jpg" if "jpeg" in mime or "jpg" in mime else ".bin"
+                frame_path = MOBILE_COMPANION_DIR / f"latest_frame{suffix}"
+                frame_path.write_bytes(img_bytes)
+                _write_mobile_companion_json("latest_frame.json", {
+                    "path": str(frame_path),
+                    "mime": mime,
+                    "bytes": len(img_bytes),
+                    "width": payload.get("width"),
+                    "height": payload.get("height"),
+                    "captured_at": payload.get("captured_at"),
+                    "client": self.client_address[0],
+                })
+                self._send_json({"ok": True, "bytes": len(img_bytes)})
+            except json.JSONDecodeError:
+                self._send_json({"ok": False, "error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        if route == "/api/mobile/audio":
+            if not self._authorized():
+                self._send_json({"ok": False, "error": "Unauthorized"}, HTTPStatus.UNAUTHORIZED)
+                return
+            try:
+                payload = self._read_json()
+                audio_bytes, mime = _decode_data_url(str(payload.get("audio") or ""))
+                if not audio_bytes or len(audio_bytes) > 3_500_000:
+                    self._send_json({"ok": False, "error": "Invalid or oversized audio chunk"}, HTTPStatus.BAD_REQUEST)
+                    return
+                MOBILE_COMPANION_DIR.mkdir(parents=True, exist_ok=True)
+                suffix = ".webm" if "webm" in mime else ".bin"
+                audio_path = MOBILE_COMPANION_DIR / f"latest_audio{suffix}"
+                audio_path.write_bytes(audio_bytes)
+                _write_mobile_companion_json("latest_audio.json", {
+                    "path": str(audio_path),
+                    "mime": mime,
+                    "bytes": len(audio_bytes),
+                    "captured_at": payload.get("captured_at"),
+                    "client": self.client_address[0],
+                })
+                self._send_json({"ok": True, "bytes": len(audio_bytes)})
             except json.JSONDecodeError:
                 self._send_json({"ok": False, "error": "Invalid JSON"}, HTTPStatus.BAD_REQUEST)
             except Exception as exc:
