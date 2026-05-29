@@ -558,22 +558,65 @@ function setupSplash() {
   const fallback = $("introFallback");
   const skip = $("skipIntro");
   let done = false;
+  let fallbackTimer = null;
+  let durationTimer = null;
+  let playStarted = false;
+
+  const clearTimers = () => {
+    if (fallbackTimer) clearTimeout(fallbackTimer);
+    if (durationTimer) clearTimeout(durationTimer);
+    fallbackTimer = null;
+    durationTimer = null;
+  };
+
   const finishOnce = () => {
     if (done) return;
     done = true;
+    clearTimers();
+    try {
+      video.pause();
+    } catch {}
     finishSplash();
   };
+
+  const armDurationTimer = () => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    if (durationTimer) clearTimeout(durationTimer);
+    durationTimer = setTimeout(finishOnce, Math.ceil((video.duration + 1.5) * 1000));
+  };
+
+  const tryPlayIntro = () => {
+    if (done || playStarted) return;
+    playStarted = true;
+    fallback.classList.add("hidden");
+    armDurationTimer();
+    video.play().catch(() => {
+      fallback.classList.remove("hidden");
+      fallbackTimer = setTimeout(finishOnce, 3500);
+    });
+  };
+
   skip.addEventListener("click", finishOnce);
   video.addEventListener("ended", finishOnce);
-  video.addEventListener("canplay", () => {
-    fallback.classList.add("hidden");
-    video.play().catch(() => setTimeout(finishOnce, 2200));
+  video.addEventListener("loadedmetadata", armDurationTimer);
+  video.addEventListener("timeupdate", () => {
+    if (Number.isFinite(video.duration) && video.duration > 0 && video.currentTime >= video.duration - 0.15) {
+      finishOnce();
+    }
   });
+  video.addEventListener("canplay", tryPlayIntro);
+  video.addEventListener("canplaythrough", tryPlayIntro);
   video.addEventListener("error", () => {
     fallback.classList.remove("hidden");
-    setTimeout(finishOnce, 2300);
+    fallbackTimer = setTimeout(finishOnce, 3500);
   });
-  setTimeout(finishOnce, 5200);
+  fallbackTimer = setTimeout(() => {
+    if (!playStarted) finishOnce();
+  }, 15000);
+  try {
+    video.load();
+  } catch {}
+  setTimeout(tryPlayIntro, 250);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
