@@ -54,8 +54,8 @@ import java.util.List;
 import java.util.Locale;
 
 public class CompanionForegroundService extends Service {
-    public static final String ACTION_START = "com.prashant.jarvismobile.companion.START";
-    public static final String ACTION_STOP = "com.prashant.jarvismobile.companion.STOP";
+    public static final String ACTION_START = BuildConfig.APPLICATION_ID + ".companion.START";
+    public static final String ACTION_STOP = BuildConfig.APPLICATION_ID + ".companion.STOP";
     private static final String CHANNEL_ID = "jarvis_companion_live";
     private static final int NOTIFICATION_ID = 9117;
     private static final String APP_BUILD = "front-only-video-20260529-2";
@@ -194,10 +194,10 @@ public class CompanionForegroundService extends Service {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "JARVIS live companion",
+                BuildConfig.ASSISTANT_DISPLAY_NAME + " live companion",
                 NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Visible status while JARVIS receives phone camera, mic, and location.");
+        channel.setDescription("Visible status while " + BuildConfig.ASSISTANT_DISPLAY_NAME + " receives phone camera, mic, and location.");
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.createNotificationChannel(channel);
     }
@@ -222,7 +222,7 @@ public class CompanionForegroundService extends Service {
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.presence_video_online)
-                .setContentTitle("JARVIS companion is live")
+                .setContentTitle(BuildConfig.COMPANION_TITLE + " is live")
                 .setContentText(text)
                 .setOngoing(true)
                 .setContentIntent(openPending)

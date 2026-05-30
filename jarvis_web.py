@@ -76,8 +76,11 @@ BASE_DIR = Path(__file__).resolve().parent
 WEB_DIR = BASE_DIR / "web"
 TASKS_FILE = BASE_DIR / "jarvis_tasks.json"
 MOBILE_COMPANION_DIR = BASE_DIR / ".jarvis_runtime" / "mobile_companion"
+MOBILE_COMPANION_DIR = Path(os.environ.get("JARVIS_MOBILE_RUNTIME_DIR", MOBILE_COMPANION_DIR)).expanduser()
+if not MOBILE_COMPANION_DIR.is_absolute():
+    MOBILE_COMPANION_DIR = BASE_DIR / MOBILE_COMPANION_DIR
 MOBILE_TO_PHONE_DIR = MOBILE_COMPANION_DIR / "to_phone"
-MOBILE_PUBLIC_VIDEOS_DIR = Path.home() / "Videos" / "JARVIS"
+MOBILE_PUBLIC_VIDEOS_DIR = Path(os.environ.get("JARVIS_PUBLIC_VIDEOS_DIR", Path.home() / "Videos" / "JARVIS")).expanduser()
 _system_stats_net_lock = threading.Lock()
 _system_stats_net_state = {
     "time": 0.0,
@@ -875,10 +878,15 @@ class JarvisWebHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         route = urlparse(self.path).path
         if route == "/api/health":
+            cfg = load_config()
+            assistant_name = str(cfg.get("assistant_name") or "J.A.R.V.I.S")
+            owner_name = str(cfg.get("assistant_owner_name") or cfg.get("user_name") or "Prashant")
             self._send_json(
                 {
                     "ok": True,
-                    "name": "J.A.R.V.I.S",
+                    "name": assistant_name,
+                    "owner_name": owner_name,
+                    "assistant_style": str(cfg.get("assistant_style") or "classic"),
                     "platform": platform.platform(),
                     "python": platform.python_version(),
                     "local_ips": _local_ips(),

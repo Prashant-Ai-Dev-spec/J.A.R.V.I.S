@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">JARVIS Mobile</string>
     <string name="accessibility_service_description">Allows JARVIS Mobile to control this phone when you explicitly enable phone control commands.</string>
 
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">

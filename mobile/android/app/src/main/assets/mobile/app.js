@@ -3,6 +3,13 @@ const $ = (id) => document.getElementById(id);
 const state = {
   serverUrl: "",
   apiToken: "",
+  brand: {
+    ownerName: "Prashant",
+    assistantName: "JARVIS",
+    companionTitle: "JARVIS Mobile",
+    variant: "prashant",
+    defaultCallReply: "Prashant abhi busy hai. Aapko unse kya kaam hai, mujhe message me bata sakte hain.",
+  },
   statsTimer: null,
   callsTimer: null,
   activeCall: null,
@@ -15,6 +22,18 @@ const state = {
     audioRecorder: null,
   },
 };
+
+function assistantLabel() {
+  return state.brand.assistantName || "JARVIS";
+}
+
+function ownerLabel() {
+  return state.brand.ownerName || "Prashant";
+}
+
+function isShreyaMode() {
+  return state.brand.variant === "shreya";
+}
 
 function nativeAvailable() {
   return typeof window.JarvisAndroid !== "undefined";
@@ -89,6 +108,36 @@ function setConnection(ok, label) {
 function requireServer() {
   if (!state.serverUrl) {
     throw new Error("Server URL missing. Add your HTTPS Ngrok URL or PC LAN URL in settings.");
+  }
+}
+
+function loadBranding() {
+  const raw = nativeJson("brandConfig") || {};
+  state.brand = {
+    ownerName: raw.owner_name || raw.ownerName || state.brand.ownerName,
+    assistantName: raw.assistant_name || raw.assistantName || state.brand.assistantName,
+    companionTitle: raw.companion_title || raw.companionTitle || state.brand.companionTitle,
+    variant: raw.variant || state.brand.variant,
+    defaultCallReply: raw.default_call_reply || raw.defaultCallReply || state.brand.defaultCallReply,
+  };
+  document.body.classList.toggle("brand-shreya", isShreyaMode());
+  document.title = state.brand.companionTitle;
+  document.querySelectorAll("[data-brand='assistant']").forEach((el) => { el.textContent = assistantLabel(); });
+  document.querySelectorAll("[data-brand='companion-title']").forEach((el) => { el.textContent = state.brand.companionTitle; });
+  document.querySelectorAll("[data-brand='owner']").forEach((el) => { el.textContent = ownerLabel(); });
+  const callReply = $("normalCallReply");
+  if (callReply && (!callReply.value || callReply.value.includes("Prashant"))) {
+    callReply.value = state.brand.defaultCallReply;
+  }
+  const commandTitle = document.querySelector("[data-brand='command-title']");
+  if (commandTitle) {
+    commandTitle.textContent = isShreyaMode() ? "How may I serve you, queen?" : `What should ${assistantLabel()} do?`;
+  }
+  const splashLine = document.querySelector("[data-brand='splash-line']");
+  if (splashLine) {
+    splashLine.textContent = isShreyaMode()
+      ? "Your cute royal AI companion is waking up for Shreya."
+      : "Connect to your laptop brain and control everything from your phone.";
   }
 }
 
@@ -172,7 +221,7 @@ function requestCompanionPermissions() {
 function openAllFilesAccess() {
   if (nativeAvailable() && window.JarvisAndroid.openAllFilesAccessSettings) {
     window.JarvisAndroid.openAllFilesAccessSettings();
-    $("fileSyncMessage").textContent = "Android settings opened. Enable All files access for JARVIS, then come back.";
+    $("fileSyncMessage").textContent = `Android settings opened. Enable All files access for ${assistantLabel()}, then come back.`;
     return;
   }
   $("fileSyncMessage").textContent = "All files access settings are available only inside the Android APK.";
@@ -319,7 +368,7 @@ async function connectCompanion() {
       if (!result.ok) throw new Error(result.message || "Foreground service failed.");
       setCompanionStatus(true, "Foreground live");
       setConnection(true, "Online");
-      setCompanionMessage("Foreground sharing, file bridge, and front-priority video recording are ON. A permanent notification is visible; Disconnect stops it.");
+    setCompanionMessage("Foreground sharing, file bridge, and front-priority video recording are ON. A permanent notification is visible; Disconnect stops it.");
       return;
     }
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -410,9 +459,9 @@ async function testConnection() {
     saveSettings();
     const data = await api("/api/health");
     setConnection(true, "Online");
-    setSetupMessage(`Connected: ${data.name || "JARVIS"}`);
+    setSetupMessage(`Connected: ${data.name || assistantLabel()}`);
     $("setupCard").classList.add("hidden");
-    addBubble("Mobile connected to JARVIS.", "jarvis");
+    addBubble(isShreyaMode() ? "Your royal companion is connected, queen." : `Mobile connected to ${assistantLabel()}.`, "jarvis");
     refreshStats();
     startCallPolling();
   } catch (err) {
@@ -437,7 +486,7 @@ async function sendCommand(command) {
     speak(reply);
   } catch (err) {
     addBubble(err.message, "error");
-    speak("Connection issue hai bhai.");
+    speak(isShreyaMode() ? "Connection issue hai, queen." : "Connection issue hai bhai.");
   }
 }
 
@@ -465,7 +514,7 @@ function tryMobileCommand(command) {
 function refreshPhoneControl() {
   const status = nativeJson("mobileControlStatus");
   if (!status) {
-    $("phoneControlStatus").textContent = "Open this inside JARVIS Android APK to use phone control.";
+    $("phoneControlStatus").textContent = `Open this inside ${assistantLabel()} Android APK to use phone control.`;
     return;
   }
   $("phoneControlStatus").textContent = [
@@ -481,7 +530,7 @@ function setupPhoneControl() {
     return;
   }
   window.JarvisAndroid.openAccessibilitySettings();
-  $("phoneControlStatus").textContent = "Android Accessibility settings opened. Enable JARVIS Phone Control.";
+  $("phoneControlStatus").textContent = `Android Accessibility settings opened. Enable ${assistantLabel()} Phone Control.`;
 }
 
 async function whatsappStatus() {
@@ -581,7 +630,7 @@ async function handleCallAction(action) {
   } catch (err) {
     setCallMessage(err.message, true);
     addBubble(err.message, "error");
-    speak("Call action fail ho gaya bhai.");
+    speak(isShreyaMode() ? "Call action fail ho gaya, queen." : "Call action fail ho gaya bhai.");
   }
 }
 
@@ -695,7 +744,7 @@ function saveNormalCallReply() {
 function refreshNormalCallSecretary() {
   const status = nativeJson("normalCallSecretaryStatus");
   if (!status) {
-    $("normalCallStatus").textContent = "Open this inside JARVIS Android APK to use normal call secretary.";
+    $("normalCallStatus").textContent = `Open this inside ${assistantLabel()} Android APK to use normal call secretary.`;
     return;
   }
   $("normalCallReply").value = status.reply || $("normalCallReply").value;
@@ -898,9 +947,10 @@ function setupSplash() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  loadBranding();
   bindEvents();
   setupSplash();
-  addBubble("Ready bhai. Connect your PC JARVIS and send a command.", "jarvis");
+  addBubble(isShreyaMode() ? "Ready queen. Say JARVIS, and I am here for you." : `Ready bhai. Connect your PC ${assistantLabel()} and send a command.`, "jarvis");
   setTimeout(refreshNormalCallSecretary, 800);
   setTimeout(refreshPhoneControl, 900);
   setTimeout(refreshCompanionPermissions, 1000);

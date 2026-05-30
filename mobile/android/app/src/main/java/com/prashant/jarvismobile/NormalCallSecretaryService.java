@@ -22,8 +22,7 @@ public class NormalCallSecretaryService extends CallScreeningService {
     static final String KEY_LAST_NUMBER = "normal_call_last_number";
     static final String KEY_LAST_STATUS = "normal_call_last_status";
     static final String KEY_LAST_TIME = "normal_call_last_time";
-    static final String DEFAULT_REPLY =
-            "Prashant abhi busy hai. Aapko unse kya kaam hai, mujhe message me bata sakte hain.";
+    static final String DEFAULT_REPLY = BuildConfig.DEFAULT_CALL_REPLY;
 
     private static final String CHANNEL_ID = "jarvis_normal_call_secretary";
 
@@ -110,7 +109,7 @@ public class NormalCallSecretaryService extends CallScreeningService {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
-                    "JARVIS Call Secretary",
+                    BuildConfig.ASSISTANT_DISPLAY_NAME + " Call Secretary",
                     NotificationManager.IMPORTANCE_DEFAULT
             );
             manager.createNotificationChannel(channel);
@@ -121,7 +120,7 @@ public class NormalCallSecretaryService extends CallScreeningService {
                 : new Notification.Builder(this);
         Notification notification = builder
                 .setSmallIcon(android.R.drawable.sym_call_missed)
-                .setContentTitle("JARVIS normal call secretary")
+                .setContentTitle(BuildConfig.ASSISTANT_DISPLAY_NAME + " normal call secretary")
                 .setContentText(text)
                 .setAutoCancel(true)
                 .build();

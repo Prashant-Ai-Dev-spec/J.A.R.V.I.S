@@ -77,6 +77,42 @@ let latestMobileMapUrl = "";
 let latestMobileFiles = [];
 let latestMobileFolders = [];
 let currentMobilePath = "";
+let webBrand = {
+  name: "J.A.R.V.I.S",
+  ownerName: "Prashant",
+  style: "classic"
+};
+
+function assistantLogName() {
+  return webBrand.name || "J.A.R.V.I.S";
+}
+
+function applyWebBranding(data = {}) {
+  webBrand = {
+    name: data.name || webBrand.name,
+    ownerName: data.owner_name || webBrand.ownerName,
+    style: data.assistant_style || webBrand.style
+  };
+  const isShreya = webBrand.style === "shreya";
+  document.body.classList.toggle("web-brand-shreya", isShreya);
+  document.title = isShreya ? "Shreya JARVIS - Royal Control" : "J.A.R.V.I.S. - Mission Control";
+  document.querySelectorAll(".nlk-brand-title, .ql-title").forEach(el => {
+    el.textContent = isShreya ? "SHREYA JARVIS" : "J.A.R.V.I.S.";
+  });
+  document.querySelectorAll(".header-logo").forEach(el => {
+    el.innerHTML = `${isShreya ? "SHREYA JARVIS" : "J.A.R.V.I.S."} <span class="header-sub">${isShreya ? "ROYAL CONTROL" : "MISSION CONTROL"}</span>`;
+  });
+  document.querySelectorAll(".sender").forEach(el => {
+    if (el.textContent.trim() === "J.A.R.V.I.S.") el.textContent = assistantLogName();
+  });
+}
+
+function fetchWebBranding() {
+  fetch("/api/health", { headers: publicHeaders({ "X-Jarvis-Token": apiToken }) })
+    .then(res => res.ok ? res.json() : null)
+    .then(data => { if (data) applyWebBranding(data); })
+    .catch(() => {});
+}
 
 // --- Initialize Elements ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -921,6 +957,7 @@ function pollSystemStats() {
 function startDataPolling() {
   setInterval(pollUplinkStatus, 1500);
   
+  fetchWebBranding();
   pollUplinkStatus();
   fetchWeatherNews();
   fetchLocation(false);
@@ -1533,8 +1570,8 @@ function sendPrompterCommand() {
   .then(data => {
     if (data.ok && data.reply) {
       const reply = normalizeJarvisReply(data.reply);
-      appendLog("J.A.R.V.I.S.", reply, "jarvis");
-      appendChatBubble("J.A.R.V.I.S.", reply, "jarvis-bubble");
+      appendLog(assistantLogName(), reply, "jarvis");
+      appendChatBubble(assistantLogName(), reply, "jarvis-bubble");
       if (voiceReplies) {
         speakText(reply);
       } else {
@@ -2615,8 +2652,8 @@ function runJarvisCommand(command, options = {}) {
       if (data.ok) {
         const reply = normalizeJarvisReply(data.reply || "Command executed.");
         playSynthSound("success");
-        appendChatBubble("J.A.R.V.I.S.", reply, "jarvis-bubble");
-        appendLog("JARVIS", reply, "jarvis");
+        appendChatBubble(assistantLogName(), reply, "jarvis-bubble");
+        appendLog(assistantLogName(), reply, "jarvis");
         if (options.speakText) speakText(reply);
       } else {
         playSynthSound("error");
@@ -3298,7 +3335,7 @@ function setupEventListeners() {
       ? `Project context loaded with ${attachedWebReferences.length} attached file(s). Ask your next command with KEEP REFERENCES enabled.`
       : "No project files attached yet. Use ADD FILES or ADD FOLDER first.";
     appendLog("FILES", summary, attachedWebReferences.length ? "jarvis" : "sys");
-    appendChatBubble("J.A.R.V.I.S.", summary, "jarvis-bubble");
+    appendChatBubble(assistantLogName(), summary, "jarvis-bubble");
   });
   if (removeFileBtn) removeFileBtn.addEventListener("click", removeSelectedContextFile);
   if (clearFilesBtn) clearFilesBtn.addEventListener("click", () => {

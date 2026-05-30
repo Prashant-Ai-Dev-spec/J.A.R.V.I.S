@@ -64,10 +64,19 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private Uri pendingCameraUri;
 
+    private String assistantName() {
+        return BuildConfig.ASSISTANT_DISPLAY_NAME;
+    }
+
+    private String ownerName() {
+        return BuildConfig.OWNER_NAME;
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("jarvis_mobile", Context.MODE_PRIVATE);
+        seedDefaultConnectionSettings();
 
         webView = new WebView(this);
         setContentView(webView);
@@ -81,6 +90,22 @@ public class MainActivity extends Activity {
         });
 
         webView.loadUrl("file:///android_asset/mobile/index.html");
+    }
+
+    private void seedDefaultConnectionSettings() {
+        SharedPreferences.Editor edit = prefs.edit();
+        boolean changed = false;
+        if (prefs.getString("server_url", "").trim().isEmpty()
+                && !BuildConfig.DEFAULT_SERVER_URL.trim().isEmpty()) {
+            edit.putString("server_url", BuildConfig.DEFAULT_SERVER_URL.trim());
+            changed = true;
+        }
+        if (prefs.getString("api_token", "").trim().isEmpty()
+                && !BuildConfig.DEFAULT_API_TOKEN.trim().isEmpty()) {
+            edit.putString("api_token", BuildConfig.DEFAULT_API_TOKEN.trim());
+            changed = true;
+        }
+        if (changed) edit.apply();
     }
 
     private void configureWebView() {
@@ -164,7 +189,10 @@ public class MainActivity extends Activity {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Bolo bhai...");
+        intent.putExtra(
+                RecognizerIntent.EXTRA_PROMPT,
+                "shreya".equals(BuildConfig.BRAND_VARIANT) ? "Boliye queen..." : "Bolo bhai..."
+        );
         try {
             startActivityForResult(intent, REQUEST_SPEECH);
         } catch (ActivityNotFoundException ex) {
@@ -342,7 +370,7 @@ public class MainActivity extends Activity {
     private String setFileSyncEnabled(boolean enabled) {
         boolean allFiles = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager();
         if (enabled && !allFiles) {
-            return jsonResult(true, false, "Open All files access settings and allow JARVIS first.");
+            return jsonResult(true, false, "Open All files access settings and allow " + assistantName() + " first.");
         }
         prefs.edit().putBoolean("file_sync_enabled", enabled).apply();
         return jsonResult(true, true, enabled ? "File sync enabled. It runs only while companion foreground service is live." : "File sync disabled.");
@@ -443,7 +471,7 @@ public class MainActivity extends Activity {
             json.put("accessibility_enabled", JarvisAccessibilityService.isActive());
             json.put("message", JarvisAccessibilityService.isActive()
                     ? "Phone control ready."
-                    : "Enable JARVIS Phone Control in Android Accessibility settings.");
+                    : "Enable " + assistantName() + " Phone Control in Android Accessibility settings.");
             return json.toString();
         } catch (Exception exc) {
             return "{\"error\":\"" + exc.getMessage() + "\"}";
@@ -496,7 +524,7 @@ public class MainActivity extends Activity {
         }
         if (containsAny(lower, "accessibility", "phone control setup")) {
             openAccessibilitySettings();
-            return jsonResult(true, true, "Accessibility settings open kar diya. JARVIS Phone Control enable karo.");
+            return jsonResult(true, true, "Accessibility settings open kar diya. " + assistantName() + " Phone Control enable karo.");
         }
 
         if (isAccessibilityCommand(lower)) {
@@ -707,6 +735,23 @@ public class MainActivity extends Activity {
         public void speak(String text) {
             if (tts != null && text != null && !text.trim().isEmpty()) {
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jarvis-mobile-tts");
+            }
+        }
+
+        @JavascriptInterface
+        public String brandConfig() {
+            try {
+                JSONObject json = new JSONObject();
+                json.put("owner_name", ownerName());
+                json.put("assistant_name", assistantName());
+                json.put("companion_title", BuildConfig.COMPANION_TITLE);
+                json.put("variant", BuildConfig.BRAND_VARIANT);
+                json.put("default_call_reply", BuildConfig.DEFAULT_CALL_REPLY);
+                json.put("default_server_url", BuildConfig.DEFAULT_SERVER_URL);
+                json.put("has_default_api_token", !BuildConfig.DEFAULT_API_TOKEN.trim().isEmpty());
+                return json.toString();
+            } catch (Exception exc) {
+                return "{\"owner_name\":\"" + ownerName() + "\",\"assistant_name\":\"" + assistantName() + "\"}";
             }
         }
 

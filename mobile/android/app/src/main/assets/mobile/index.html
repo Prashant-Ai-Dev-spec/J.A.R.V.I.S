@@ -25,8 +25,8 @@
     </div>
     <div class="splash-copy">
       <p class="eyebrow">Premium AI companion</p>
-      <h1>JARVIS Mobile</h1>
-      <p>Connect to your laptop brain and control everything from your phone.</p>
+      <h1 data-brand="companion-title">JARVIS Mobile</h1>
+      <p data-brand="splash-line">Connect to your laptop brain and control everything from your phone.</p>
     </div>
     <button id="skipIntro" class="ghost-btn">Skip</button>
   </section>
@@ -35,7 +35,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Connected assistant</p>
-        <h2>JARVIS</h2>
+        <h2 data-brand="assistant">JARVIS</h2>
       </div>
       <button id="connectionPill" class="status-pill warn">Offline</button>
     </header>
@@ -58,7 +58,7 @@
     <section id="home" class="screen active">
       <div class="glass hero-card">
         <p class="eyebrow">Natural command</p>
-        <h3>What should JARVIS do?</h3>
+        <h3 data-brand="command-title">What should JARVIS do?</h3>
         <div class="command-box">
           <textarea id="commandInput" rows="3" placeholder="Example: light status, proactive status, system report"></textarea>
           <button id="micBtn" class="round-btn" aria-label="Speak command">Mic</button>
@@ -70,7 +70,7 @@
         <div class="section-head">
           <div>
             <p class="eyebrow">Live companion link</p>
-            <h3>Phone sensors to JARVIS</h3>
+            <h3>Phone sensors to <span data-brand="assistant">JARVIS</span></h3>
             <p class="muted small">Camera, microphone, and location share only while this card says connected.</p>
           </div>
           <span id="companionStatus" class="call-chip">Disconnected</span>
@@ -193,7 +193,7 @@
       <div class="glass camera-card">
         <p class="eyebrow">Phone camera</p>
         <h3>Analyze an image</h3>
-        <p class="muted">Capture or choose a photo. JARVIS will process it on the PC server.</p>
+        <p class="muted">Capture or choose a photo. <span data-brand="assistant">JARVIS</span> will process it on the PC server.</p>
         <input id="imagePicker" type="file" accept="image/*" capture="environment" />
         <img id="preview" class="preview hidden" alt="Selected image preview" />
         <button id="analyzeImage" class="primary wide">Analyze image</button>
@@ -236,7 +236,7 @@
       <div class="glass">
         <p class="eyebrow">Phone control</p>
         <h3>Android app control</h3>
-        <p class="muted">Open installed apps directly. Enable Accessibility only if you want JARVIS to tap, type, scroll, back, home, and click screen text.</p>
+        <p class="muted">Open installed apps directly. Enable Accessibility only if you want <span data-brand="assistant">JARVIS</span> to tap, type, scroll, back, home, and click screen text.</p>
         <div class="row">
           <button id="setupPhoneControl" class="primary">Setup</button>
           <button id="refreshPhoneControl" class="secondary">Status</button>

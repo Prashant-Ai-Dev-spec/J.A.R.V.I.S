@@ -7587,3 +7587,22 @@ body {
     grid-template-columns: 1fr;
   }
 }
+body.web-brand-shreya {
+  --cyan-primary: #ff8bc8;
+  --cyan-secondary: #ffd6eb;
+  --blue-primary: #ffe08a;
+  --purple-primary: #d972ff;
+  --gold-primary: #ffe08a;
+  --bg-primary: #100711;
+  --bg-secondary: #1b0b1d;
+}
+
+body.web-brand-shreya .hud-grid-overlay,
+body.web-brand-shreya .ambient-system-overlay {
+  filter: hue-rotate(105deg) saturate(1.18);
+}
+
+body.web-brand-shreya .nlk-brand-sub::after {
+  content: " · Shreya Mode";
+  color: var(--gold-primary);
+}

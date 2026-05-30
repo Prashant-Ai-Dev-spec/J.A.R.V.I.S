@@ -144,7 +144,9 @@ def ensure_face_recognition():
 #  PATHS
 # ═══════════════════════════════════════════════
 BASE_DIR    = Path(__file__).parent
-CFG_FILE    = BASE_DIR / "jarvis_config.json"
+CFG_FILE    = Path(os.environ.get("JARVIS_CONFIG_PATH", BASE_DIR / "jarvis_config.json")).expanduser()
+if not CFG_FILE.is_absolute():
+    CFG_FILE = BASE_DIR / CFG_FILE
 NOTES_FILE  = BASE_DIR / "jarvis_notes.json"
 EVENTS_FILE = BASE_DIR / "jarvis_events.json"
 PHOTOS_DIR  = BASE_DIR / "jarvis_photos"
@@ -355,6 +357,9 @@ def load_config() -> dict:
     with open(CFG_FILE, "r", encoding="utf-8-sig") as f:
         cfg = json.load(f)
     cfg.setdefault("ai_provider", "auto")
+    cfg.setdefault("assistant_name", "J.A.R.V.I.S")
+    cfg.setdefault("assistant_owner_name", cfg.get("user_name", "Prashant"))
+    cfg.setdefault("assistant_style", "classic")
     cfg.setdefault("groq_api_key", "")
     cfg.setdefault("openrouter_api_key", "")
     cfg.setdefault("gemini_api_key", "")

@@ -2,9 +2,24 @@ plugins {
     id "com.android.application"
 }
 
+def companionSecrets = new Properties()
+def companionSecretsFile = rootProject.file("companion-secrets.properties")
+if (companionSecretsFile.exists()) {
+    companionSecretsFile.withInputStream { companionSecrets.load(it) }
+}
+
+def quotedBuildString = { value ->
+    def clean = String.valueOf(value ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"${clean}\""
+}
+
 android {
     namespace "com.prashant.jarvismobile"
     compileSdk 35
+
+    buildFeatures {
+        buildConfig true
+    }
 
     defaultConfig {
         applicationId "com.prashant.jarvismobile"
@@ -12,6 +27,34 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0.0"
+    }
+
+    flavorDimensions "owner"
+    productFlavors {
+        prashant {
+            dimension "owner"
+            applicationId "com.prashant.jarvismobile"
+            resValue "string", "app_name", "JARVIS Mobile"
+            buildConfigField "String", "OWNER_NAME", "\"Prashant\""
+            buildConfigField "String", "ASSISTANT_DISPLAY_NAME", "\"JARVIS\""
+            buildConfigField "String", "COMPANION_TITLE", "\"JARVIS Mobile\""
+            buildConfigField "String", "BRAND_VARIANT", "\"prashant\""
+            buildConfigField "String", "DEFAULT_CALL_REPLY", "\"Prashant abhi busy hai. Aapko unse kya kaam hai, mujhe message me bata sakte hain.\""
+            buildConfigField "String", "DEFAULT_SERVER_URL", quotedBuildString(companionSecrets.getProperty("serverUrl", ""))
+            buildConfigField "String", "DEFAULT_API_TOKEN", quotedBuildString(companionSecrets.getProperty("apiToken", ""))
+        }
+        shreya {
+            dimension "owner"
+            applicationId "com.shreya.jarvisqueen"
+            resValue "string", "app_name", "Shreya JARVIS"
+            buildConfigField "String", "OWNER_NAME", "\"Shreya\""
+            buildConfigField "String", "ASSISTANT_DISPLAY_NAME", "\"JARVIS\""
+            buildConfigField "String", "COMPANION_TITLE", "\"Shreya JARVIS\""
+            buildConfigField "String", "BRAND_VARIANT", "\"shreya\""
+            buildConfigField "String", "DEFAULT_CALL_REPLY", "\"Shreya abhi busy hai. Aapko unse kya kaam hai, mujhe message me bata sakte hain.\""
+            buildConfigField "String", "DEFAULT_SERVER_URL", quotedBuildString(companionSecrets.getProperty("serverUrl", ""))
+            buildConfigField "String", "DEFAULT_API_TOKEN", quotedBuildString(companionSecrets.getProperty("apiToken", ""))
+        }
     }
 
     compileOptions {

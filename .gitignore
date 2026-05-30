@@ -2,6 +2,7 @@
 .env
 env
 jarvis_config.json
+jarvis_config.shreya.json
 
 # Personal runtime data
 jarvis_ai_history.json
@@ -33,6 +34,7 @@ mobile/android/.buildozer-venv/
 mobile/android/app/build/
 mobile/android/bin/
 mobile/android/local.properties
+mobile/android/companion-secrets.properties
 
 # Python
 __pycache__/
@@ -44,6 +46,7 @@ venv/
 
 # Jarvis Cowork runtime state
 .jarvis_runtime/
+.jarvis_runtime_shreya/
 telemetry.log
 backend/dispatch/dispatch.db
 backend/dispatch/dispatch.db-*

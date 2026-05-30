@@ -13,6 +13,21 @@
   --red: #ff5f7a;
 }
 
+body.brand-shreya {
+  --bg: #130914;
+  --panel: rgba(45, 18, 42, 0.72);
+  --panel-strong: rgba(60, 22, 55, 0.86);
+  --line: rgba(255, 181, 223, 0.24);
+  --text: #fff7fb;
+  --muted: #e1adc9;
+  --blue: #ffd2ea;
+  --purple: #d96eea;
+  --pink: #ff7fbd;
+  --green: #78f0c1;
+  --gold: #ffe08a;
+  --red: #ff5f88;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -136,6 +151,24 @@ button {
 .setup-card, .hero-card, .chat-card, .camera-card, .companion-card, .screen > .glass {
   padding: 18px;
   margin: 10px 0 16px;
+}
+
+body.brand-shreya .ambient {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(255, 127, 189, 0.26), transparent 34%),
+    radial-gradient(circle at 86% 18%, rgba(255, 224, 138, 0.18), transparent 32%),
+    linear-gradient(180deg, #170918 0%, #120914 52%, #08050b 100%);
+}
+
+body.brand-shreya .primary {
+  background: linear-gradient(135deg, #ff7fbd, #ffe08a);
+  color: #2a1024;
+  box-shadow: 0 14px 28px rgba(255, 127, 189, 0.24);
+}
+
+body.brand-shreya .bubble.jarvis {
+  border-color: rgba(255, 224, 138, 0.18);
+  background: rgba(255, 127, 189, 0.12);
 }
 
 .setup-card h3, .hero-card h3, .chat-card h3, .camera-card h3, .companion-card h3, .screen h3 {
