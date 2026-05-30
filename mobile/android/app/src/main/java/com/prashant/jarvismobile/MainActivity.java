@@ -426,6 +426,11 @@ public class MainActivity extends Activity {
         try {
             JSONObject json = new JSONObject();
             json.put("running", CompanionForegroundService.isRunning());
+            json.put("last_network_ok", prefs.getBoolean(CompanionForegroundService.KEY_LAST_NETWORK_OK, false));
+            json.put("last_network_path", prefs.getString(CompanionForegroundService.KEY_LAST_NETWORK_PATH, ""));
+            json.put("last_network_code", prefs.getInt(CompanionForegroundService.KEY_LAST_NETWORK_CODE, 0));
+            json.put("last_network_error", prefs.getString(CompanionForegroundService.KEY_LAST_NETWORK_ERROR, ""));
+            json.put("last_network_at", prefs.getString(CompanionForegroundService.KEY_LAST_NETWORK_AT, ""));
             return json.toString();
         } catch (Exception exc) {
             return "{\"running\":false,\"error\":\"" + exc.getMessage() + "\"}";

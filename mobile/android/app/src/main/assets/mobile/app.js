@@ -20,6 +20,7 @@ const state = {
     frameTimer: null,
     locationWatch: null,
     audioRecorder: null,
+    nativeStatusTimer: null,
   },
 };
 
@@ -201,6 +202,35 @@ function setCompanionStatus(connected, label) {
   status.classList.toggle("ok", !!connected);
 }
 
+function renderNativeCompanionStatus() {
+  const status = nativeJson("companionServiceStatus");
+  if (!status) return;
+  const running = !!status.running;
+  if (!running) {
+    if (state.companion.connected) setCompanionStatus(false, "Disconnected");
+    return;
+  }
+  setCompanionStatus(true, status.last_network_ok ? "Server linked" : "Foreground live");
+  if (status.last_network_path) {
+    const code = Number(status.last_network_code || 0);
+    const detail = status.last_network_ok
+      ? `Server receiving phone data: ${status.last_network_path} HTTP ${code}.`
+      : `Phone service cannot reach server on ${status.last_network_path}. ${code ? `HTTP ${code}. ` : ""}${status.last_network_error || ""}`;
+    setCompanionMessage(detail, !status.last_network_ok);
+  }
+}
+
+function startNativeStatusPolling() {
+  stopNativeStatusPolling();
+  renderNativeCompanionStatus();
+  state.companion.nativeStatusTimer = setInterval(renderNativeCompanionStatus, 2500);
+}
+
+function stopNativeStatusPolling() {
+  if (state.companion.nativeStatusTimer) clearInterval(state.companion.nativeStatusTimer);
+  state.companion.nativeStatusTimer = null;
+}
+
 function renderPermissionStatus(status) {
   const data = status || {};
   $("permCamera").textContent = `Camera: ${data.camera ? "granted" : "needed"}`;
@@ -375,7 +405,8 @@ async function connectCompanion() {
       if (!result.ok) throw new Error(result.message || "Foreground service failed.");
       setCompanionStatus(true, "Foreground live");
       setConnection(true, "Online");
-    setCompanionMessage("Foreground sharing, file bridge, and front-priority video recording are ON. A permanent notification is visible; Disconnect stops it.");
+      setCompanionMessage("Foreground service started. Waiting for first server receipt...");
+      startNativeStatusPolling();
       return;
     }
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -426,6 +457,7 @@ async function disconnectCompanion(notify = true) {
   preview.srcObject = null;
   preview.classList.add("hidden");
   setCompanionStatus(false, "Disconnected");
+  stopNativeStatusPolling();
   if (notify && state.serverUrl && !nativeServiceMode) {
     try {
       await companionApi("/api/mobile/session", { status: "disconnected", disconnected_at: new Date().toISOString() });

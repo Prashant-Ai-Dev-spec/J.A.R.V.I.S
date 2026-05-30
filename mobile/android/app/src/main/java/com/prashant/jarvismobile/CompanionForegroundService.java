@@ -58,7 +58,12 @@ public class CompanionForegroundService extends Service {
     public static final String ACTION_STOP = BuildConfig.APPLICATION_ID + ".companion.STOP";
     private static final String CHANNEL_ID = "jarvis_companion_live";
     private static final int NOTIFICATION_ID = 9117;
-    private static final String APP_BUILD = "front-only-video-20260529-2";
+    private static final String APP_BUILD = "companion-diagnostics-20260530-1";
+    public static final String KEY_LAST_NETWORK_OK = "companion_last_network_ok";
+    public static final String KEY_LAST_NETWORK_PATH = "companion_last_network_path";
+    public static final String KEY_LAST_NETWORK_CODE = "companion_last_network_code";
+    public static final String KEY_LAST_NETWORK_ERROR = "companion_last_network_error";
+    public static final String KEY_LAST_NETWORK_AT = "companion_last_network_at";
 
     private static volatile boolean running = false;
 
@@ -254,6 +259,35 @@ public class CompanionForegroundService extends Service {
 
     private boolean hasAllFilesAccess() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager();
+    }
+
+    private void recordNetworkResult(String path, boolean ok, int code, String error) {
+        prefs.edit()
+                .putBoolean(KEY_LAST_NETWORK_OK, ok)
+                .putString(KEY_LAST_NETWORK_PATH, path == null ? "" : path)
+                .putInt(KEY_LAST_NETWORK_CODE, code)
+                .putString(KEY_LAST_NETWORK_ERROR, error == null ? "" : error)
+                .putString(KEY_LAST_NETWORK_AT, isoNow())
+                .apply();
+    }
+
+    private String readErrorBody(HttpURLConnection conn) {
+        try {
+            java.io.InputStream err = conn.getErrorStream();
+            if (err == null) return "";
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buf = new byte[1024];
+            int total = 0;
+            int n;
+            while ((n = err.read(buf)) != -1 && total < 4096) {
+                int take = Math.min(n, 4096 - total);
+                out.write(buf, 0, take);
+                total += take;
+            }
+            return out.toString("UTF-8");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private void postSession(String status) {
@@ -940,8 +974,14 @@ public class CompanionForegroundService extends Service {
                 int n;
                 while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
             }
+            recordNetworkResult(path, true, conn.getResponseCode(), "");
             return new JSONObject(out.toString("UTF-8"));
         } catch (Exception exc) {
+            int code = -1;
+            try {
+                code = conn.getResponseCode();
+            } catch (Exception ignored) {}
+            recordNetworkResult(path, false, code, exc.getClass().getSimpleName() + ": " + exc.getMessage());
             return new JSONObject();
         } finally {
             conn.disconnect();
@@ -966,7 +1006,19 @@ public class CompanionForegroundService extends Service {
             out.write(body);
         }
         try {
-            conn.getResponseCode();
+            int code = conn.getResponseCode();
+            if (code >= 200 && code < 300) {
+                recordNetworkResult(path, true, code, "");
+            } else {
+                recordNetworkResult(path, false, code, readErrorBody(conn));
+            }
+        } catch (IOException exc) {
+            int code = -1;
+            try {
+                code = conn.getResponseCode();
+            } catch (Exception ignored) {}
+            recordNetworkResult(path, false, code, exc.getClass().getSimpleName() + ": " + exc.getMessage());
+            throw exc;
         } finally {
             conn.disconnect();
         }
