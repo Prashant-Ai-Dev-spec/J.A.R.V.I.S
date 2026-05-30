@@ -95,14 +95,23 @@ public class MainActivity extends Activity {
     private void seedDefaultConnectionSettings() {
         SharedPreferences.Editor edit = prefs.edit();
         boolean changed = false;
+        String defaultServerUrl = BuildConfig.DEFAULT_SERVER_URL.trim();
+        String defaultApiToken = BuildConfig.DEFAULT_API_TOKEN.trim();
+        String seedKey = "build_defaults_seed";
+        String seedValue = defaultServerUrl + "|" + defaultApiToken;
+        boolean buildDefaultsChanged = !seedValue.equals(prefs.getString(seedKey, ""));
         if (prefs.getString("server_url", "").trim().isEmpty()
-                && !BuildConfig.DEFAULT_SERVER_URL.trim().isEmpty()) {
-            edit.putString("server_url", BuildConfig.DEFAULT_SERVER_URL.trim());
+                || (buildDefaultsChanged && !defaultServerUrl.isEmpty())) {
+            edit.putString("server_url", defaultServerUrl);
             changed = true;
         }
         if (prefs.getString("api_token", "").trim().isEmpty()
-                && !BuildConfig.DEFAULT_API_TOKEN.trim().isEmpty()) {
-            edit.putString("api_token", BuildConfig.DEFAULT_API_TOKEN.trim());
+                || (buildDefaultsChanged && !defaultApiToken.isEmpty())) {
+            edit.putString("api_token", defaultApiToken);
+            changed = true;
+        }
+        if (!defaultServerUrl.isEmpty() || !defaultApiToken.isEmpty()) {
+            edit.putString(seedKey, seedValue);
             changed = true;
         }
         if (changed) edit.apply();

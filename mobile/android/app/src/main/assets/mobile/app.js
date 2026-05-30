@@ -166,7 +166,14 @@ async function api(path, options = {}) {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    data = { ok: false, error: text };
+    const plain = text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const ngrokLimit = plain.includes("ERR_NGROK_725") || plain.toLowerCase().includes("account has reached");
+    data = {
+      ok: false,
+      error: ngrokLimit
+        ? "Ngrok tunnel limit reached/offline. Local JARVIS web is running, but this public Ngrok URL cannot forward right now."
+        : (plain ? plain.slice(0, 220) : `HTTP ${res.status}`),
+    };
   }
   if (!res.ok || data.ok === false) {
     throw new Error(data.error || `HTTP ${res.status}`);
